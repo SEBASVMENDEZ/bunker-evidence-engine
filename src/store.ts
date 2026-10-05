@@ -126,12 +126,9 @@ export const useStore = create<State>((set, get) => {
     try {
       const p = await probeVideo(file, c.duration || undefined);
       // time-lapse: sin audio o con fps de captura en los metadatos (solo videos del celular, no grabaciones propias)
-      const lapseInfo =
-        c.source === 'carpeta' || c.source === 'importado'
-          ? /\.(mp4|mov|m4v|3gp)$/i.test(c.name)
-            ? lapseFromInfo(await mp4Info(file), c.name)
-            : lapseFromInfo(null, c.name)
-          : { lapse: false };
+      const fromPhone = c.source === 'carpeta' || c.source === 'importado';
+      const info = /\.(mp4|mov|m4v|3gp)$/i.test(c.name) ? await mp4Info(file) : null;
+      const lapseInfo = fromPhone ? lapseFromInfo(info, c.name) : { lapse: false };
       // releer: el usuario pudo cambiar algo mientras se procesaba
       const cur = get().clips.find((x) => x.id === id);
       if (!cur) return;
@@ -141,6 +138,8 @@ export const useStore = create<State>((set, get) => {
         width: p.width,
         height: p.height,
         thumb: p.thumb ?? c.thumb,
+        sig: p.sig ?? c.sig,
+        rotation: info?.rotation ?? c.rotation ?? null,
         status: 'listo',
         error: undefined,
         ...(cur.speedBy === 'manual' ? {} : { lapse: lapseInfo.lapse, speed: lapseInfo.speed, speedBy: 'auto' as const }),

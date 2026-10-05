@@ -7,6 +7,7 @@ export interface Probe {
   width: number;
   height: number;
   thumb?: string;
+  sig?: number[];
 }
 
 function waitFor(el: HTMLMediaElement, ev: string, ms: number): Promise<void> {
@@ -74,13 +75,15 @@ export async function probeVideo(blob: Blob, hintDuration?: number): Promise<Pro
     const width = v.videoWidth;
     const height = v.videoHeight;
     let thumb: string | undefined;
+    let sig: number[] | undefined;
     if (width && height) {
       const at = duration > 1 ? Math.min(Math.max(0.6, duration * 0.18), duration - 0.3) : 0;
       v.currentTime = at;
       await waitFor(v, 'seeked', 15000).catch(() => {});
       thumb = makeThumb(v);
+      sig = visualSig(v);
     }
-    return { duration, width, height, thumb };
+    return { duration, width, height, thumb, sig };
   } finally {
     v.removeAttribute('src');
     v.load();
@@ -184,6 +187,7 @@ export interface Mp4Info {
   hasAudio: boolean | null;
   videoFps: number | null;
   captureFps: number | null; // Android: com.android.capture.fps (solo en time-lapse)
+  rotation: number | null; // 90 = cámara trasera en vertical, 270 = frontal (Android)
 }
 
 const CONTAINERS = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl', 'udta', 'edts']);
@@ -211,10 +215,10 @@ export async function mp4Info(blob: Blob): Promise<Mp4Info | null> {
     }
     if (!moov) return null;
     const dv = moov;
-    const info: Mp4Info = { hasAudio: false, videoFps: null, captureFps: null };
+    const info: Mp4Info = { hasAudio: false, videoFps: null, captureFps: null, rotation: null };
     let keys: string[] = [];
 
-    const walk = (start: number, end: number, track: { handler?: string; timescale?: number; duration?: number; samples?: number } | null) => {
+    const walk = (start: number, end: number, track: { handler?: string; timescale?: number; duration?: number; samples?: number; rot?: number } | null) => {
       let p = start;
       while (p + 8 <= end) {
         let size = dv.getUint32(p);
@@ -228,12 +232,19 @@ export async function mp4Info(blob: Blob): Promise<Mp4Info | null> {
         const body = p + hdr;
         const boxEnd = Math.min(end, p + size);
         if (type === 'trak') {
-          const t: { handler?: string; timescale?: number; duration?: number; samples?: number } = {};
+          const t: { handler?: string; timescale?: number; duration?: number; samples?: number; rot?: number } = {};
           walk(body, boxEnd, t);
           if (t.handler === 'soun') info.hasAudio = true;
           if (t.handler === 'vide' && t.timescale && t.duration && t.samples) info.videoFps = t.samples / (t.duration / t.timescale);
+          if (t.handler === 'vide' && t.rot !== undefined && info.rotation === null) info.rotation = t.rot;
         } else if (CONTAINERS.has(type)) walk(body, boxEnd, track);
         else if (type === 'hdlr' && track) track.handler = fourcc(dv, body + 8);
+        else if (type === 'tkhd' && track) {
+          const m = body + (dv.getUint8(body) === 1 ? 52 : 40);
+          const a = dv.getInt32(m) / 65536;
+          const b = dv.getInt32(m + 4) / 65536;
+          track.rot = (Math.round((Math.atan2(b, a) * 180) / Math.PI) + 360) % 360;
+        }
         else if (type === 'mdhd' && track) {
           const v = dv.getUint8(body);
           track.timescale = dv.getUint32(body + (v === 1 ? 20 : 12));
@@ -287,6 +298,47 @@ export function lapseFromInfo(info: Mp4Info | null, name: string): { lapse: bool
     if (f >= 2) return { lapse: true, speed: f };
   }
   if (byName) return { lapse: true };
+  // WhatsApp recomprime y a veces quita el audio: sin audio no implica time-lapse
+  if (/-WA\d+/i.test(name)) return { lapse: false };
   if (info && info.hasAudio === false) return { lapse: true };
   return { lapse: false };
+}
+
+// ---------------- firma visual del lugar ----------------
+/** Huella de 6×6 colores, normalizada por canal: reconoce el mismo lugar con distinta luz. */
+export function visualSig(src: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement): number[] | undefined {
+  const N = 6;
+  const c = document.createElement('canvas');
+  c.width = N;
+  c.height = N;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return undefined;
+  try {
+    ctx.drawImage(src, 0, 0, N, N);
+    const d = ctx.getImageData(0, 0, N, N).data;
+    const out: number[] = [];
+    for (let ch = 0; ch < 3; ch++) {
+      const vals: number[] = [];
+      for (let i = 0; i < N * N; i++) vals.push(d[i * 4 + ch]);
+      const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+      const sd = Math.sqrt(vals.reduce((s, v) => s + (v - mean) ** 2, 0) / vals.length) || 1;
+      for (const v of vals) out.push(Math.round(((v - mean) / sd) * 100) / 100);
+    }
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
+export function sigSimilarity(a?: number[], b?: number[]): number | null {
+  if (!a || !b || a.length !== b.length) return null;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  return na && nb ? dot / Math.sqrt(na * nb) : null;
 }

@@ -155,7 +155,7 @@ for (const f of files) {
   const byName = dateFromName(name);
   const validMeta = meta?.created && meta.created.getFullYear() >= 2015 && meta.created <= new Date(Date.now() + 864e5);
   const date = byName ?? (validMeta ? meta.created : st.mtime);
-  const lapse = !!meta && (meta.captureFps > 0 || meta.hasAudio === false);
+  const lapse = !!meta && (meta.captureFps > 0 || (meta.hasAudio === false && !/-WA\d+/i.test(name)));
   const speed = meta?.captureFps ? Math.round((meta.fps && meta.fps > 5 ? meta.fps : 30) / meta.captureFps) : null;
   rows.push({
     folder,

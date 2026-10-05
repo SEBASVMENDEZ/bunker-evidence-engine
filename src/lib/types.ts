@@ -70,6 +70,8 @@ export interface Clip {
   speed?: number; // factor de aceleración conocido (metadatos o elegido por ti)
   speedBy?: 'auto' | 'manual';
   realDuration?: number; // duración real estimada (archivo × velocidad)
+  rotation?: number | null; // 90 trasera / 270 frontal (Android, en vertical)
+  sig?: number[]; // firma visual del lugar
   width: number;
   height: number;
   thumb?: string;
