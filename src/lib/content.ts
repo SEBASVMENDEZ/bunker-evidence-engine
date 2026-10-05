@@ -141,7 +141,7 @@ export const DEFAULT_SETTINGS: Settings = {
   haptics: true,
   filmMinutes: 8,
   filmGrouping: 'area',
-  importWeeks: 6,
+  importWeeks: 10,
   rhythmIntroSeen: true,
   camera: { facing: 'user', mode: 'auto', quality: 'hd', mic: true },
 };
