@@ -124,7 +124,9 @@ export const useStore = create<State>((set, get) => {
       return;
     }
     try {
-      const p = await probeVideo(file, c.duration || undefined);
+      // sin copia guardada: se guardan unos cuadros para que la película lo muestre aunque el video no esté a mano
+      const p = await probeVideo(file, c.duration || undefined, !DB.isPersistent(c));
+      if (p.posters?.length) await DB.putPosters(c.id, p.posters);
       // time-lapse: sin audio o con fps de captura en los metadatos (solo videos del celular, no grabaciones propias)
       const fromPhone = c.source === 'carpeta' || c.source === 'importado';
       const info = /\.(mp4|mov|m4v|3gp)$/i.test(c.name) ? await mp4Info(file) : null;
@@ -445,18 +447,28 @@ export const useStore = create<State>((set, get) => {
 
     importFiles: async (items) => {
       const created: Clip[] = [];
+      const again: string[] = [];
       let skipped = 0;
+      let relinked = 0;
       for (const it of items) {
         try {
           if (it instanceof File) {
             if (!VIDEO_EXT.test(it.name) && !it.type.startsWith('video/')) continue;
-            const key = uid('m_');
-            const c = await newClipFromFile(it, { source: 'importado', blobKey: key });
-            if (!c) {
-              skipped++;
+            // el video se lee desde la galería, sin copiarlo dentro de la app (no duplica espacio)
+            const known = get().clips.find((c) => c.fingerprint === `${it.name}|${it.size}`);
+            if (created.some((c) => c.fingerprint === `${it.name}|${it.size}`)) continue; // elegido dos veces
+            if (known) {
+              if (DB.isPersistent(known)) skipped++;
+              else {
+                DB.attachSession(known.id, it);
+                relinked++;
+                if (known.status !== 'listo') again.push(known.id);
+              }
               continue;
             }
-            await DB.putMedia(key, it);
+            const c = await newClipFromFile(it, { source: 'importado' });
+            if (!c) continue;
+            DB.attachSession(c.id, it);
             created.push(c);
           } else {
             const file = await it.getFile();
@@ -475,8 +487,10 @@ export const useStore = create<State>((set, get) => {
         }
       }
       upsertClips(created);
-      enqueue(created.map((c) => c.id));
+      if (again.length) upsertClips(again.map((id) => ({ ...get().clips.find((c) => c.id === id)!, status: 'pendiente' as const })));
+      enqueue([...created.map((c) => c.id), ...again]);
       if (created.length) get().toast(`Procesando ${created.length} ${created.length === 1 ? 'video' : 'videos'}…`, 'info');
+      else if (relinked) get().toast(`${relinked} ${relinked === 1 ? 'video reconectado' : 'videos reconectados'}: ya puedes verlos aquí.`, 'ok');
       else if (skipped) get().toast('Esos videos ya estaban en tu Búnker.', 'info');
     },
 

@@ -78,6 +78,33 @@ export async function deleteClip(c: Clip, deleteOwnMedia: boolean) {
   await d.delete('clips', c.id);
   if (c.handleKey) await d.delete('handles', c.handleKey);
   if (deleteOwnMedia && c.blobKey) await d.delete('media', c.blobKey);
+  for (let i = 0; i < 4; i++) await d.delete('media', posterKey(c.id, i));
+  session.delete(c.id);
+}
+
+// ---- Videos elegidos de la galería: se leen sin copiarlos ----
+// Un archivo elegido con "Importar" vive mientras la app esté abierta; al volver a elegirlo se reconecta.
+const session = new Map<string, Blob>();
+export const attachSession = (clipId: string, file: Blob) => session.set(clipId, file);
+/** ¿El video original queda guardado o enlazado de forma permanente? */
+export const isPersistent = (c: Clip) => !!(c.blobKey || c.handleKey) || c.source === 'demo';
+
+// ---- Vista previa: unos cuadros del clip para la película cuando el video no está a mano ----
+const posterKey = (clipId: string, i: number) => `p_${clipId}_${i}`;
+export async function putPosters(clipId: string, frames: Blob[]) {
+  const d = await db();
+  const tx = d.transaction('media', 'readwrite');
+  await Promise.all([...frames.map((b, i) => tx.store.put(b, posterKey(clipId, i))), tx.done]);
+}
+export async function getPosters(clipId: string): Promise<Blob[]> {
+  const d = await db();
+  const out: Blob[] = [];
+  for (let i = 0; i < 4; i++) {
+    const b = await d.get('media', posterKey(clipId, i));
+    if (!b) break;
+    out.push(b);
+  }
+  return out;
 }
 
 export async function putMedia(key: string, blob: Blob) {
@@ -118,6 +145,8 @@ export async function deleteFolder(id: string) {
 
 /** Obtiene el archivo de un clip, venga de una grabación propia o de un archivo original enlazado. */
 export async function clipFile(c: Clip, askPermission = false): Promise<Blob | null> {
+  const s = session.get(c.id);
+  if (s) return s;
   const d = await db();
   if (c.blobKey) return (await d.get('media', c.blobKey)) ?? null;
   if (c.handleKey) {

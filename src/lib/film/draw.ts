@@ -520,13 +520,13 @@ export function drawDemo(ctx: CanvasRenderingContext2D, clip: Clip, area: Area |
 let blurCanvas: HTMLCanvasElement | null = null;
 
 /** Dibuja un fotograma: horizontal → a pantalla completa; vertical → centrado con fondo difuminado. */
-export function drawVideoFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElement, t: number) {
-  const vw = v.videoWidth;
-  const vh = v.videoHeight;
+export function drawVideoFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElement | HTMLImageElement, t: number, zoom = 1) {
+  const vw = v instanceof HTMLVideoElement ? v.videoWidth : v.naturalWidth;
+  const vh = v instanceof HTMLVideoElement ? v.videoHeight : v.naturalHeight;
   if (!vw || !vh) return;
   const r = vw / vh;
   if (r >= 1.45) {
-    const k = 1.0 + 0.012 * Math.sin(t * 0.3);
+    const k = (1.0 + 0.012 * Math.sin(t * 0.3)) * zoom;
     let dw = W * k;
     let dh = dw / r;
     if (dh < H * k) {
@@ -564,8 +564,30 @@ export function drawVideoFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElemen
   ctx.fill();
   ctx.shadowColor = 'transparent';
   ctx.clip();
-  ctx.drawImage(v, x, y, dw, dh);
+  const zw = dw * zoom;
+  const zh = dh * zoom;
+  ctx.drawImage(v, x - (zw - dw) / 2, y - (zh - dh) / 2, zw, zh);
   ctx.restore();
+}
+
+/** Vista previa de un clip cuyo video no está a mano: sus cuadros con un acercamiento lento y fundidos. */
+export function drawStill(ctx: CanvasRenderingContext2D, imgs: HTMLImageElement[], t: number, dur: number) {
+  ctx.fillStyle = '#05070D';
+  ctx.fillRect(0, 0, W, H);
+  if (!imgs.length) return;
+  const per = dur / imgs.length;
+  const i = Math.min(imgs.length - 1, Math.floor(t / per));
+  const local = t - i * per;
+  drawVideoFrame(ctx, imgs[i], t, 1.02 + 0.06 * clamp01(local / per));
+  // fundido hacia el cuadro siguiente
+  const fade = 0.5;
+  if (i + 1 < imgs.length && local > per - fade) {
+    ctx.save();
+    ctx.globalAlpha = clamp01((local - (per - fade)) / fade);
+    drawVideoFrame(ctx, imgs[i + 1], t, 1.02);
+    ctx.restore();
+  }
+  text(ctx, 'VISTA PREVIA', W - 64, 76, { size: 18, weight: 600, align: 'right', color: 'rgba(255,255,255,0.55)', spacing: 5, display: false });
 }
 
 const BADGES: Record<string, { label: string; color: string }> = {

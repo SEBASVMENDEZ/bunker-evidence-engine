@@ -8,6 +8,19 @@ export interface Probe {
   height: number;
   thumb?: string;
   sig?: number[];
+  posters?: Blob[]; // cuadros de vista previa (solo si se pidieron)
+}
+
+/** Cuadro actual del video como JPEG (lado mayor ≤ max). */
+function frameBlob(v: HTMLVideoElement, max = 640): Promise<Blob | null> {
+  const s = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(v.videoWidth * s);
+  c.height = Math.round(v.videoHeight * s);
+  const ctx = c.getContext('2d');
+  if (!ctx) return Promise.resolve(null);
+  ctx.drawImage(v, 0, 0, c.width, c.height);
+  return new Promise((res) => c.toBlob((b) => res(b), 'image/jpeg', 0.72));
 }
 
 function waitFor(el: HTMLMediaElement, ev: string, ms: number): Promise<void> {
@@ -53,7 +66,7 @@ export function makeThumb(v: HTMLVideoElement | HTMLCanvasElement, max = 360): s
 }
 
 /** Duración, tamaño y miniatura de un video. */
-export async function probeVideo(blob: Blob, hintDuration?: number): Promise<Probe> {
+export async function probeVideo(blob: Blob, hintDuration?: number, withPosters = false): Promise<Probe> {
   const url = URL.createObjectURL(blob);
   const v = document.createElement('video');
   v.muted = true;
@@ -83,7 +96,18 @@ export async function probeVideo(blob: Blob, hintDuration?: number): Promise<Pro
       thumb = makeThumb(v);
       sig = visualSig(v);
     }
-    return { duration, width, height, thumb, sig };
+    let posters: Blob[] | undefined;
+    if (withPosters && width && height && duration > 0) {
+      // tres momentos del clip: así la película lo muestra aunque el video no esté a mano
+      posters = [];
+      for (const p of [0.2, 0.5, 0.8]) {
+        v.currentTime = Math.min(duration - 0.2, Math.max(0, duration * p));
+        if (!(await waitFor(v, 'seeked', 15000).then(() => true, () => false))) break;
+        const b = await frameBlob(v);
+        if (b) posters.push(b);
+      }
+    }
+    return { duration, width, height, thumb, sig, posters };
   } finally {
     v.removeAttribute('src');
     v.load();

@@ -46,7 +46,8 @@ Una hora de estudio grabada a ×10 es un archivo de 6 minutos. Búnker detecta l
 
 | Opción | Cómo |
 |---|---|
-| **Cámara del celular** (la de siempre) | Activa la copia automática de videos de tu celular a una carpeta del PC (Google Drive para escritorio, OneDrive, Fotos de Windows/Enlace móvil). En Búnker: *Evidencia → Vincular carpeta*. Al abrir la app los videos nuevos entran solos; si el navegador vuelve a pedir permiso, basta un clic en *Sincronizar* (en Hoy o Evidencia). |
+| **Cámara del celular, con la app en el celular** | Graba como siempre (time-lapse incluido). En Búnker toca *Importar videos* y elige los del día en la galería. Búnker los **lee sin copiarlos** (no duplica espacio): guarda solo la clasificación, la miniatura y 3 cuadros de vista previa (~30 KB cada uno). La película del domingo usa el video si está a mano y, si no, sus cuadros de vista previa. Volver a elegir un video lo reconecta, sin duplicarlo. |
+| **Cámara del celular, con la app en el PC** | Activa la copia automática de videos de tu celular a una carpeta del PC (Google Drive para escritorio, OneDrive, Fotos de Windows/Enlace móvil). En Búnker: *Evidencia → Vincular carpeta*. Al abrir la app los videos nuevos entran solos; si el navegador vuelve a pedir permiso, basta un clic en *Sincronizar* (en Hoy o Evidencia). |
 | **Búnker Camera** | Pestaña *Cámara*: el área ya viene elegida (la siguiente en tu rutina) y, al terminar una toma, la siguiente queda lista. Modos Auto / Normal / Proceso / Reflexión, ★ para marcar un momento importante, grabación de pantalla para trading. |
 | **Arrastrar y soltar** | Suelta videos sobre la ventana desde cualquier carpeta. |
 

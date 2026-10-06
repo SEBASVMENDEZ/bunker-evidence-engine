@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { X, Star, EyeOff, Eye, Trash2, Calendar, HardDrive, Info, KeyRound } from 'lucide-react';
+import { X, Star, EyeOff, Eye, Trash2, Calendar, HardDrive, Info, KeyRound, Upload } from 'lucide-react';
 import { useStore } from '../store';
 import { AreaIcon } from '../components/ui';
 import { clipFile } from '../lib/db';
@@ -33,6 +33,8 @@ export default function ClipModal({ id }: { id: string }) {
   const assignArea = useStore((s) => s.assignArea);
   const updateClip = useStore((s) => s.updateClip);
   const removeClip = useStore((s) => s.removeClip);
+  const importFiles = useStore((s) => s.importFiles);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [needsPerm, setNeedsPerm] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -61,7 +63,7 @@ export default function ClipModal({ id }: { id: string }) {
 
   if (!clip) return null;
   const area = areas.find((a) => a.id === clip.areaId);
-  const own = clip.source === 'camara' || clip.source === 'pantalla' || clip.source === 'importado';
+  const own = !!clip.blobKey; // hay una copia dentro de la app (grabaciones propias o importaciones antiguas)
 
   return (
     <motion.div className="overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}>
@@ -72,11 +74,26 @@ export default function ClipModal({ id }: { id: string }) {
           ) : clip.thumb ? (
             <img src={clip.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'brightness(.6)' }} />
           ) : null}
-          {needsPerm && (
+          {needsPerm && clip.handleKey && (
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
               <button className="btn primary" onClick={() => load(true)}>
                 <KeyRound size={16} /> Permitir acceso al archivo original
               </button>
+            </div>
+          )}
+          {needsPerm && !clip.handleKey && !clip.blobKey && (
+            // importado desde la galería: el video no se copió; elegirlo de nuevo lo reconecta
+            <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '16px 56px 16px 16px', textAlign: 'center' }}>
+              <div className="col" style={{ gap: 8, alignItems: 'center', maxWidth: 340 }}>
+                <div style={{ fontSize: 12.5, lineHeight: 1.4, color: '#fff', background: 'rgba(0,0,0,.6)', borderRadius: 14, padding: '7px 12px' }}>
+                  Sigue en tu galería, no se copió.
+                  <div style={{ opacity: 0.7, fontSize: 11.5, wordBreak: 'break-all' }}>{clip.name}</div>
+                </div>
+                <input ref={galleryRef} type="file" accept="video/*" multiple hidden onChange={async (e) => { await importFiles([...(e.target.files ?? [])]); e.target.value = ''; load(false); }} />
+                <button className="btn primary sm" onClick={() => galleryRef.current?.click()}>
+                  <Upload size={15} /> Elegir en la galería
+                </button>
+              </div>
             </div>
           )}
           {clip.source === 'demo' && (

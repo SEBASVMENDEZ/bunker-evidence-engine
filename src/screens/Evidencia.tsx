@@ -208,13 +208,17 @@ export default function Evidencia() {
           <Empty
             icon={<FolderSync />}
             title="Sin evidencia en esta semana"
-            text={supportsFolders ? 'Vincula la carpeta donde se sincronizan los videos de tu celular, arrastra videos a esta ventana, o graba con la Búnker Camera.' : 'Importa videos o graba con la Búnker Camera.'}
+            text={supportsFolders ? 'Vincula la carpeta donde se sincronizan los videos de tu celular, arrastra videos a esta ventana, o graba con la Búnker Camera.' : 'Elige los videos de tu galería con Importar: se leen sin copiarlos, así no ocupan espacio extra. También puedes grabar con la Búnker Camera.'}
             action={
               supportsFolders ? (
                 <button className="btn primary" onClick={() => linkFolder()}>
                   <FolderSync size={16} /> Vincular carpeta
                 </button>
-              ) : undefined
+              ) : (
+                <button className="btn primary" onClick={() => fileRef.current?.click()}>
+                  <Upload size={16} /> Importar videos
+                </button>
+              )
             }
           />
         </div>

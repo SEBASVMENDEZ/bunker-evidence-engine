@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Flame, Play, Video, ChevronDown, Clapperboard, Wind, FolderSync, Sparkles, Quote, RefreshCw, Briefcase, Waves, X } from 'lucide-react';
+import { Flame, Play, Video, ChevronDown, Clapperboard, Wind, FolderSync, Sparkles, Quote, RefreshCw, Briefcase, Waves, X, Upload } from 'lucide-react';
 import { useStore, needsConfirm } from '../store';
 import { AreaIcon, RoutineRing, Counter, Section } from '../components/ui';
 import { nextInRoutine } from '../lib/classify';
@@ -19,6 +19,9 @@ export default function Hoy() {
   const setCalm = useStore((s) => s.setCalm);
   const loadDemo = useStore((s) => s.loadDemo);
   const linkFolder = useStore((s) => s.linkFolder);
+  const importFiles = useStore((s) => s.importFiles);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const supportsFolders = 'showDirectoryPicker' in window;
   const setSettings = useStore((s) => s.setSettings);
   const folders = useStore((s) => s.folders);
   const syncAll = useStore((s) => s.syncAll);
@@ -128,18 +131,31 @@ export default function Hoy() {
           <div className="row wrap between" style={{ gap: 16 }}>
             <div className="grow">
               <div className="eyebrow">Primer paso</div>
-              <h3 style={{ fontSize: 20, marginTop: 4 }}>Conecta tu evidencia una sola vez. Después, nada más que grabar.</h3>
+              <h3 style={{ fontSize: 20, marginTop: 4 }}>
+                {supportsFolders ? 'Conecta tu evidencia una sola vez. Después, nada más que grabar.' : 'Graba como siempre. Luego tráelos con un toque.'}
+              </h3>
               <p className="muted small" style={{ marginTop: 6 }}>
-                Vincula la carpeta donde llegan los videos de tu celular (Google Drive, OneDrive, Fotos de Windows…) o graba aquí mismo con la Búnker Camera.
+                {supportsFolders
+                  ? 'Vincula la carpeta donde llegan los videos de tu celular (Google Drive, OneDrive, Fotos de Windows…) o graba aquí mismo con la Búnker Camera.'
+                  : 'Toca Importar y elige los videos del día en tu galería: Búnker los lee y los ordena sin copiarlos, así no te ocupa más espacio.'}
               </p>
             </div>
             <div className="row wrap">
               <button className="btn" onClick={() => loadDemo()}>
                 <Sparkles size={16} /> Ver una semana demo
               </button>
-              <button className="btn primary" onClick={() => linkFolder()}>
-                <FolderSync size={16} /> Vincular carpeta
-              </button>
+              {supportsFolders ? (
+                <button className="btn primary" onClick={() => linkFolder()}>
+                  <FolderSync size={16} /> Vincular carpeta
+                </button>
+              ) : (
+                <>
+                  <input ref={fileRef} type="file" accept="video/*" multiple hidden onChange={(e) => { importFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
+                  <button className="btn primary" onClick={() => fileRef.current?.click()}>
+                    <Upload size={16} /> Importar videos
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </motion.div>

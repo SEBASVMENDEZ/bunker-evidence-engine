@@ -4,10 +4,14 @@ import type { Clip } from '../types';
 import { segAt, type Film, type Seg } from './edl';
 import {
   H, W, type Scene, drawCapitulo, drawClipOverlay, drawComparacion, drawDemo, drawExperimento, drawFinal,
-  drawInsight, drawIntro, drawLoading, drawMetricas, drawPregunta, drawProgress, drawResumen, drawVideoFrame, grainOverlay,
+  drawInsight, drawIntro, drawLoading, drawMetricas, drawPregunta, drawProgress, drawResumen, drawStill, drawVideoFrame, grainOverlay,
 } from './draw';
 import { Ambient, sound } from '../sound';
 import { iconImage } from '../icons';
+import { getPosters } from '../db';
+
+/** Un video que no está a mano se muestra con sus cuadros de vista previa, sin alargar la película. */
+const STILL_MAX = 7;
 
 export interface EngineState {
   time: number;
@@ -51,6 +55,8 @@ export class FilmEngine {
   private urls = new Map<string, string>();
   private destroyed = false;
   private hasFrame = false;
+  private missing = new Set<string>(); // clips cuyo video no está disponible ahora
+  private stills = new Map<string, HTMLImageElement[]>();
   musicOn: boolean;
 
   constructor(
@@ -105,6 +111,7 @@ export class FilmEngine {
       }
     }
     this.ambient = new Ambient(this.bus, 0.55);
+    await this.checkMissing();
     this.resize(this.canvas.width || 1920, this.canvas.height || 1080);
     this.enter(0, false);
     this.last = performance.now();
@@ -129,7 +136,7 @@ export class FilmEngine {
     this.playing = true;
     if (this.musicOn) this.ambient?.start();
     const seg = this.cur;
-    if (seg.t === 'clip' && !this.isDemo(seg)) this.slot.v.play().catch(() => {});
+    if (seg.t === 'clip' && !this.isVirtual(seg)) this.slot.v.play().catch(() => {});
     if (this.local < 0.05) this.cue(seg);
     this.emit(true);
   }
@@ -219,6 +226,45 @@ export class FilmEngine {
     return seg.t === 'clip' && this.scene.clips.get(seg.clipId)?.source === 'demo';
   }
 
+  /** Fragmento que se dibuja sin reproductor de video (demostración o vista previa). */
+  private isVirtual(seg: Seg) {
+    return seg.t === 'clip' && (this.isDemo(seg) || this.missing.has(seg.clipId));
+  }
+
+  private async checkMissing() {
+    const ids = new Set(this.film.segs.flatMap((sg) => (sg.t === 'clip' ? [sg.clipId] : [])));
+    await Promise.all(
+      [...ids].map(async (id) => {
+        const c = this.scene.clips.get(id);
+        if (!c || c.source === 'demo') return;
+        const blob = await this.opts.fileFor(c).catch(() => null);
+        if (blob) return;
+        this.missing.add(id);
+        await this.loadStills(c);
+      }),
+    );
+  }
+
+  private async loadStills(c: Clip) {
+    const blobs = await getPosters(c.id).catch(() => [] as Blob[]);
+    const imgs = await Promise.all(
+      blobs.map(
+        (b, i) =>
+          new Promise<HTMLImageElement | null>((res) => {
+            const img = new Image();
+            const u = URL.createObjectURL(b);
+            this.urls.set(`${c.id}#p${i}`, u);
+            img.onload = () => res(img);
+            img.onerror = () => res(null);
+            img.src = u;
+          }),
+      ),
+    );
+    const ok = imgs.filter((x): x is HTMLImageElement => !!x);
+    const thumb = this.scene.thumbs.get(c.id);
+    this.stills.set(c.id, ok.length ? ok : thumb ? [thumb] : []);
+  }
+
   private async urlFor(c: Clip): Promise<string | null> {
     const hit = this.urls.get(c.id);
     if (hit) return hit;
@@ -248,7 +294,7 @@ export class FilmEngine {
   /** Carga el fragmento i en un reproductor y lo deja listo en su punto de inicio. */
   private async prepare(i: number, slotIdx: number, offset = 0): Promise<boolean> {
     const seg = this.film.segs[i];
-    if (!seg || seg.t !== 'clip' || this.isDemo(seg)) return true;
+    if (!seg || seg.t !== 'clip' || this.isVirtual(seg)) return true;
     const s = this.slots[slotIdx];
     const token = ++s.token;
     s.seg = i;
@@ -280,7 +326,7 @@ export class FilmEngine {
   private nextClipIndex(from: number): number {
     for (let j = from + 1; j < this.film.segs.length; j++) {
       const s = this.film.segs[j];
-      if (s.t === 'clip' && !this.isDemo(s)) return j;
+      if (s.t === 'clip' && !this.isVirtual(s)) return j;
     }
     return -1;
   }
@@ -297,7 +343,7 @@ export class FilmEngine {
     this.stallFor = 0;
     this.lastSrc = -1;
     const seg = this.cur;
-    if (seg.t === 'clip' && !this.isDemo(seg)) {
+    if (seg.t === 'clip' && !this.isVirtual(seg)) {
       let target = this.slots.findIndex((s) => s.seg === i && s.ready);
       const needsPrep = target < 0 || offset > 0.05;
       if (target < 0) target = this.slots[prevSlot].seg === i ? prevSlot : 1 - prevSlot;
@@ -311,7 +357,15 @@ export class FilmEngine {
           if (this.idx !== i || this.destroyed) return;
           this.loading = false;
           if (!ok) {
-            this.next(); // archivo inaccesible: se salta sin detener la película
+            const id = (this.film.segs[i] as ClipSeg).clipId;
+            const clip = this.scene.clips.get(id);
+            if (!clip) return this.next();
+            // el video dejó de estar disponible: se muestra su vista previa sin detener la película
+            this.missing.add(id);
+            for (const sl of this.slots) sl.v.pause();
+            this.setAudio(this.cur);
+            if (!this.stills.has(id)) this.loadStills(clip).catch(() => {});
+            this.preloadNext();
             return;
           }
           if (this.playing) this.slot.v.play().catch(() => {});
@@ -337,14 +391,14 @@ export class FilmEngine {
   private preloadNext() {
     const j = this.nextClipIndex(this.idx);
     if (j < 0) return;
-    const other = this.cur.t === 'clip' && !this.isDemo(this.cur) ? 1 - this.active : this.active;
+    const other = this.cur.t === 'clip' && !this.isVirtual(this.cur) ? 1 - this.active : this.active;
     const s = this.slots[other];
     if (s.seg === j && s.ready) return;
     this.prepare(j, other).catch(() => {});
   }
 
   private setAudio(seg: Seg) {
-    const speaking = seg.t === 'clip' && seg.audio && !this.isDemo(seg);
+    const speaking = seg.t === 'clip' && seg.audio && !this.isVirtual(seg);
     const ac = sound.ctx;
     this.slots.forEach((s, k) => {
       if (!s.gain || !ac) return;
@@ -385,7 +439,7 @@ export class FilmEngine {
 
   private advance(dt: number) {
     const seg = this.cur;
-    if (seg.t === 'clip' && !this.isDemo(seg)) {
+    if (seg.t === 'clip' && !this.isVirtual(seg)) {
       const v = this.slot.v;
       const local = (v.currentTime - seg.from) / seg.rate;
       this.local = Math.max(0, local);
@@ -401,7 +455,8 @@ export class FilmEngine {
       this.lastSrc = v.currentTime;
     } else {
       this.local += dt * 1;
-      if (this.local >= seg.dur) this.next();
+      const end = seg.t === 'clip' && !this.isDemo(seg) ? Math.min(seg.dur, STILL_MAX) : seg.dur;
+      if (this.local >= end) this.next();
     }
   }
 
@@ -468,6 +523,8 @@ export class FilmEngine {
     const src = seg.from + t * seg.rate;
     if (clip.source === 'demo') {
       drawDemo(ctx, clip, this.scene.areas.find((a) => a.id === clip.areaId), src);
+    } else if (this.missing.has(clip.id)) {
+      drawStill(ctx, this.stills.get(clip.id) ?? [], t, Math.min(seg.dur, STILL_MAX));
     } else {
       const v = this.slot.v;
       ctx.fillStyle = this.slot.ready ? '#000' : '#05070D';
