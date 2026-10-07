@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { Area, CalmLog, Clip, Compass, DailyLog, LearnSample, LinkedFolder, Settings, SheetLink, Shift, Shifts, WeekReview } from './lib/types';
+import type { Area, CalmLog, Clip, Compass, DailyLog, Intent, LearnSample, LinkedFolder, Settings, SheetLink, Shift, Shifts, WeekReview } from './lib/types';
 import * as DB from './lib/db';
 import { DEFAULT_AREAS, DEFAULT_COMPASS, DEFAULT_SETTINGS } from './lib/content';
 import { inferKind, isAnchor, markRepetitions, reclassify, CONFIRM_THRESHOLD } from './lib/classify';
+import { analyzeTramos, TRAMOS_V, TRAMO_MIN_REAL, type Tramo } from './lib/tramos';
 import { extractDate, lapseFromInfo, makeThumb, mp4Info, probeVideo, VIDEO_EXT } from './lib/media';
 import { sound } from './lib/sound';
 import { addDays, dayKey, parseHM, startOfDay, uid, weekKey, weekStart } from './lib/time';
@@ -46,6 +47,8 @@ interface State {
   calmOpen: boolean;
   turnosOpen: boolean;
   storage: { usage: number; quota: number; persisted: boolean };
+  intents: Intent[];
+  analyzing: { id: string; p: number } | null;
 
   init: () => Promise<void>;
   go: (r: Route) => void;
@@ -80,6 +83,39 @@ interface State {
   setCalm: (v: boolean) => void;
   setTurnos: (v: boolean) => void;
   refreshStorage: () => Promise<void>;
+  /** "Voy a grabar X": el siguiente video que empiece en los próximos minutos queda en esa área. */
+  setIntent: (areaId: string) => void;
+  /** Divide un video (o un tramo) en el segundo `at` del archivo. */
+  splitTramo: (id: string, at: number, thumb?: string, sig?: number[]) => void;
+  /** Une un tramo con el anterior (o el primero con el siguiente). */
+  mergeTramo: (id: string) => Promise<void>;
+}
+
+/** ¿Este video largo aún no se ha revisado por si trae varias actividades seguidas? */
+export const needsTramos = (c: Clip) =>
+  !c.parentId && !c.span && c.source !== 'demo' && (c.analyzed ?? 0) < TRAMOS_V && (c.realDuration ?? c.duration * (c.speed || (c.lapse ? 5 : 1))) >= TRAMO_MIN_REAL;
+
+/** Clips del mismo video, en orden (el primero es el original). */
+export const tramosOf = (clips: Clip[], c: Clip) => {
+  const root = c.parentId ?? c.id;
+  return clips.filter((x) => (x.parentId ?? x.id) === root && (x.span || x.id === root)).sort((a, b) => (a.span?.[0] ?? 0) - (b.span?.[0] ?? 0));
+};
+
+const INTENT_BEFORE = 5 * 60000; // el video puede empezar poco antes del toque…
+const INTENT_AFTER = 45 * 60000; // …o hasta 45 min después
+
+/** Aplica las marcas "voy a grabar": cada una toma el primer video que empieza en su ventana. */
+function applyIntents(clips: Clip[], intents: Intent[]): Clip[] {
+  const changed: Clip[] = [];
+  const sorted = [...intents].sort((a, b) => a.at - b.at);
+  const roots = clips.filter((c) => !c.parentId && c.source !== 'demo' && !c.excluded).sort((a, b) => a.takenAt - b.takenAt);
+  sorted.forEach((it, i) => {
+    const until = Math.min(it.at + INTENT_AFTER, (sorted[i + 1]?.at ?? Infinity) - 60000);
+    const c = roots.find((x) => x.takenAt >= it.at - INTENT_BEFORE && x.takenAt <= until);
+    if (!c || c.areaBy === 'manual' || (c.areaBy === 'intencion' && c.areaId === it.areaId)) return;
+    changed.push({ ...c, areaId: it.areaId, areaBy: 'intencion', confidence: 1, alts: undefined });
+  });
+  return changed;
 }
 
 const pendingIds = new Set<string>();
@@ -103,6 +139,7 @@ export const useStore = create<State>((set, get) => {
 
   /** Re-alinea los días con la rutina (y aplica lo aprendido). */
   const reclass = (days: Set<string> | 'all') => {
+    upsertClips(applyIntents(get().clips, get().intents));
     const { clips, areas, shifts } = get();
     const changed = reclassify(clips, areas, shifts, days);
     upsertClips(changed);
@@ -120,7 +157,12 @@ export const useStore = create<State>((set, get) => {
     if (!c) return;
     const file = await DB.clipFile(c);
     if (!file) {
-      upsertClips([{ ...c, status: 'sin-acceso' }]);
+      if (c.status !== 'listo') upsertClips([{ ...c, status: 'sin-acceso' }]);
+      return;
+    }
+    if (c.status === 'listo' && c.thumb) {
+      // ya procesado: solo falta revisar si es un bloque con varias actividades
+      if (needsTramos(c)) await splitIntoTramos(c, file);
       return;
     }
     try {
@@ -148,10 +190,96 @@ export const useStore = create<State>((set, get) => {
       };
       if (isAnchor(next) && next.kindBy === 'auto') next.kind = inferKind(next.duration, get().areas.find((a) => a.id === next.areaId), next.lapse);
       upsertClips([next]);
-      reclass(new Set([dayKey(next.takenAt)]));
+      if (needsTramos(next)) await splitIntoTramos(next, file);
+      else reclass(new Set([dayKey(next.takenAt)]));
     } catch (e) {
       upsertClips([{ ...c, status: 'error', error: (e as Error).message }]);
     }
+  };
+
+  /** Un clip nuevo que sale de un tramo de otro video (comparte su archivo). */
+  const tramoClip = (root: Clip, t: Pick<Tramo, 'from' | 'to'> & Partial<Pick<Tramo, 'thumb' | 'sig' | 'lay' | 'mot'>>, k: number): Clip => {
+    const takenAt = root.takenAt + Math.round(t.from * (root.speed || 1) * 1000);
+    return {
+      id: uid('c_'),
+      source: root.source,
+      parentId: root.id,
+      fingerprint: `${root.fingerprint}#${k}`,
+      name: root.name,
+      mime: root.mime,
+      size: root.size,
+      takenAt,
+      dateBy: root.dateBy,
+      duration: t.to - t.from,
+      lapse: root.lapse,
+      speed: root.speed,
+      speedBy: root.speedBy,
+      rotation: root.rotation,
+      sig: t.sig ?? root.sig,
+      lay: t.lay,
+      mot: t.mot,
+      span: [t.from, t.to],
+      width: root.width,
+      height: root.height,
+      thumb: t.thumb ?? root.thumb,
+      areaId: null,
+      confidence: 0,
+      areaBy: 'ninguno',
+      kind: 'explicacion',
+      kindBy: 'auto',
+      starred: false,
+      markers: [],
+      excluded: root.excluded,
+      week: weekKey(takenAt),
+      addedAt: Date.now(),
+      status: 'listo',
+      analyzed: TRAMOS_V,
+    };
+  };
+
+  /** Video largo: si trae varias actividades seguidas (bloque de la mañana), se divide en tramos. */
+  const splitIntoTramos = async (c: Clip, file: Blob) => {
+    set({ analyzing: { id: c.id, p: 0 } });
+    let trs: Tramo[] = [];
+    try {
+      trs = await analyzeTramos(file, {
+        duration: c.duration,
+        speed: c.speed || 1,
+        posters: !DB.isPersistent(c),
+        onProgress: (p) => set({ analyzing: { id: c.id, p } }),
+      });
+    } catch {
+      /* ilegible: se queda como un solo video */
+    } finally {
+      set({ analyzing: null });
+    }
+    const cur = get().clips.find((x) => x.id === c.id);
+    if (!cur) return;
+    if (trs.length < 2) {
+      upsertClips([{ ...cur, analyzed: TRAMOS_V, lay: trs[0]?.lay ?? cur.lay, mot: trs[0]?.mot ?? cur.mot }]);
+      reclass(new Set([dayKey(cur.takenAt)]));
+      return;
+    }
+    const first = trs[0];
+    const manual = cur.areaBy === 'manual' || cur.areaBy === 'intencion';
+    const root: Clip = {
+      ...cur,
+      span: [first.from, first.to],
+      duration: first.to - first.from,
+      thumb: first.thumb ?? cur.thumb,
+      sig: first.sig ?? cur.sig,
+      lay: first.lay,
+      mot: first.mot,
+      analyzed: TRAMOS_V,
+      realDuration: undefined,
+      ...(manual ? {} : { areaId: null, areaBy: 'ninguno' as const, confidence: 0, alts: undefined }),
+    };
+    const kids = trs.slice(1).map((t, i) => tramoClip(cur, t, i + 2));
+    if (first.posters?.length) await DB.putPosters(root.id, first.posters);
+    for (let i = 0; i < kids.length; i++) if (trs[i + 1].posters?.length) await DB.putPosters(kids[i].id, trs[i + 1].posters!);
+    upsertClips([root, ...kids]);
+    reclass(new Set([root, ...kids].map((x) => dayKey(x.takenAt))));
+    get().toast(`Bloque detectado: ${trs.length} actividades en ${cur.name}`, 'ok');
   };
 
   const runQueue = async () => {
@@ -257,9 +385,11 @@ export const useStore = create<State>((set, get) => {
     calmOpen: false,
     turnosOpen: false,
     storage: { usage: 0, quota: 0, persisted: false },
+    intents: [],
+    analyzing: null,
 
     init: async () => {
-      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet] = await Promise.all([
+      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents] = await Promise.all([
         DB.kvGet<Settings>('settings'),
         DB.kvGet<Area[]>('areas'),
         DB.kvGet<Compass>('compass'),
@@ -271,6 +401,7 @@ export const useStore = create<State>((set, get) => {
         DB.allFolders(),
         DB.kvGet<Shifts>('shifts'),
         DB.kvGet<SheetLink>('sheet'),
+        DB.kvGet<Intent[]>('intents'),
       ]);
       const st: Settings = { ...DEFAULT_SETTINGS, ...settings, camera: { ...DEFAULT_SETTINGS.camera, ...settings?.camera } };
       const def = new Map(DEFAULT_AREAS.map((a) => [a.id, a]));
@@ -289,6 +420,17 @@ export const useStore = create<State>((set, get) => {
         DB.kvSet('settings', st);
         DB.kvSet('areas', loadedAreas);
       }
+      // v2 → v3: nueva área "Estudio" (junto a Trading y Proyecto, frente al computador)
+      if (!!settings && st.version < 3) {
+        const estudio = def.get('estudio');
+        if (estudio && !loadedAreas.some((a) => a.id === 'estudio')) {
+          const at = Math.max(...loadedAreas.filter((a) => a.id === 'trading' || a.id === 'proyecto').map((a) => a.order), -1) + 1;
+          loadedAreas = [...loadedAreas.map((a) => (a.order >= at ? { ...a, order: a.order + 1 } : a)), { ...estudio, order: at }];
+          DB.kvSet('areas', loadedAreas);
+        }
+        st.version = 3;
+        DB.kvSet('settings', st);
+      }
       sound.enabled = st.sound;
       sound.volume = st.volume;
       sound.haptics = st.haptics;
@@ -304,11 +446,21 @@ export const useStore = create<State>((set, get) => {
         folders,
         shifts: shifts ?? {},
         sheet: sheet ?? null,
+        intents: intents ?? [],
         ready: true,
       });
       if (migrate) reclass('all');
       const hash = location.hash.replace('#/', '') as Route;
       if (['hoy', 'camara', 'evidencia', 'domingo', 'brujula', 'ajustes'].includes(hash)) set({ route: hash });
+      // acceso directo del ícono (mantener presionado): "Grabo: Trading" → marca y vuelve a Hoy
+      const fromShortcut = () => {
+        const intent = location.hash.match(/^#\/grabo\/([a-z0-9_-]+)/i)?.[1];
+        if (!intent) return;
+        get().go('hoy');
+        get().setIntent(intent);
+      };
+      fromShortcut();
+      window.addEventListener('hashchange', fromShortcut);
 
       // recuperar grabaciones interrumpidas
       try {
@@ -327,6 +479,8 @@ export const useStore = create<State>((set, get) => {
         /* sin grabaciones pendientes */
       }
       enqueue(clips.filter((c) => c.status === 'pendiente').map((c) => c.id));
+      // videos largos ya guardados o enlazados que aún no se revisaron por tramos
+      enqueue(clips.filter((c) => c.status === 'listo' && needsTramos(c) && DB.isPersistent(c)).map((c) => c.id));
       try {
         if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist();
       } catch {
@@ -404,8 +558,12 @@ export const useStore = create<State>((set, get) => {
     removeClip: async (id) => {
       const c = get().clips.find((x) => x.id === id);
       if (!c) return;
+      // quitar el video original quita también sus tramos (comparten el archivo)
+      const kids = c.parentId ? [] : get().clips.filter((x) => x.parentId === c.id);
+      for (const k of kids) await DB.deleteClip(k, false);
       await DB.deleteClip(c, c.source === 'camara' || c.source === 'pantalla' || c.source === 'importado');
-      set({ clips: get().clips.filter((x) => x.id !== id), clipModal: null });
+      const gone = new Set([id, ...kids.map((k) => k.id)]);
+      set({ clips: get().clips.filter((x) => !gone.has(x.id)), clipModal: null });
       reclass(new Set([dayKey(c.takenAt)]));
       get().refreshStorage();
     },
@@ -462,7 +620,7 @@ export const useStore = create<State>((set, get) => {
               else {
                 DB.attachSession(known.id, it);
                 relinked++;
-                if (known.status !== 'listo') again.push(known.id);
+                if (known.status !== 'listo' || needsTramos(known)) again.push(known.id);
               }
               continue;
             }
@@ -487,7 +645,8 @@ export const useStore = create<State>((set, get) => {
         }
       }
       upsertClips(created);
-      if (again.length) upsertClips(again.map((id) => ({ ...get().clips.find((c) => c.id === id)!, status: 'pendiente' as const })));
+      const stale = again.filter((id) => get().clips.find((c) => c.id === id)?.status !== 'listo');
+      if (stale.length) upsertClips(stale.map((id) => ({ ...get().clips.find((c) => c.id === id)!, status: 'pendiente' as const })));
       enqueue([...created.map((c) => c.id), ...again]);
       if (created.length) get().toast(`Procesando ${created.length} ${created.length === 1 ? 'video' : 'videos'}…`, 'info');
       else if (relinked) get().toast(`${relinked} ${relinked === 1 ? 'video reconectado' : 'videos reconectados'}: ya puedes verlos aquí.`, 'ok');
@@ -790,6 +949,54 @@ export const useStore = create<State>((set, get) => {
     openClip: (id) => set({ clipModal: id }),
     setCalm: (v) => set({ calmOpen: v }),
     setTurnos: (v) => set({ turnosOpen: v }),
+
+    setIntent: (areaId) => {
+      const area = get().areas.find((a) => a.id === areaId);
+      if (!area) return;
+      const intents = [...get().intents, { areaId, at: Date.now() }].slice(-300);
+      set({ intents });
+      DB.kvSet('intents', intents);
+      sound.play('pop');
+      get().toast(`Listo: tu próximo video será ${area.name}. Abre la cámara y graba.`, 'ok');
+      reclass(new Set([dayKey(Date.now())]));
+    },
+
+    splitTramo: (id, at, thumb, sig) => {
+      const c = get().clips.find((x) => x.id === id);
+      if (!c) return;
+      const span: [number, number] = c.span ?? [0, c.duration];
+      if (at < span[0] + 5 || at > span[1] - 5) {
+        get().toast('Elige un punto dentro del tramo (no tan cerca del borde).', 'info');
+        return;
+      }
+      const root = c.parentId ? get().clips.find((x) => x.id === c.parentId) : c;
+      if (!root) return;
+      const k = tramosOf(get().clips, c).length + 1;
+      const kid = tramoClip(root, { from: at, to: span[1], thumb, sig: sig ?? c.sig }, k);
+      const left: Clip = { ...c, span: [span[0], at], duration: at - span[0], realDuration: undefined, analyzed: TRAMOS_V };
+      upsertClips([left, kid]);
+      sound.play('pop');
+      reclass(new Set([dayKey(left.takenAt), dayKey(kid.takenAt)]));
+      get().openClip(kid.id);
+    },
+
+    mergeTramo: async (id) => {
+      const c = get().clips.find((x) => x.id === id);
+      if (!c?.span) return;
+      const list = tramosOf(get().clips, c);
+      const i = list.findIndex((x) => x.id === id);
+      // el primero (el original) absorbe al siguiente; los demás se unen al anterior
+      const keep = i === 0 ? list[0] : list[i - 1];
+      const drop = i === 0 ? list[1] : list[i];
+      if (!keep || !drop || !keep.span || !drop.span) return;
+      const merged: Clip = { ...keep, span: [keep.span[0], drop.span[1]], duration: drop.span[1] - keep.span[0], realDuration: undefined };
+      await DB.deleteClip(drop, false);
+      set({ clips: get().clips.filter((x) => x.id !== drop.id) });
+      upsertClips([merged]);
+      sound.play('tap');
+      reclass(new Set([dayKey(merged.takenAt), dayKey(drop.takenAt)]));
+      get().openClip(merged.id);
+    },
 
     refreshStorage: async () => {
       try {

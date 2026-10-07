@@ -12,7 +12,7 @@ export interface Probe {
 }
 
 /** Cuadro actual del video como JPEG (lado mayor ≤ max). */
-function frameBlob(v: HTMLVideoElement, max = 640): Promise<Blob | null> {
+export function frameBlob(v: HTMLVideoElement, max = 640): Promise<Blob | null> {
   const s = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
   const c = document.createElement('canvas');
   c.width = Math.round(v.videoWidth * s);
@@ -23,7 +23,7 @@ function frameBlob(v: HTMLVideoElement, max = 640): Promise<Blob | null> {
   return new Promise((res) => c.toBlob((b) => res(b), 'image/jpeg', 0.72));
 }
 
-function waitFor(el: HTMLMediaElement, ev: string, ms: number): Promise<void> {
+export function waitFor(el: HTMLMediaElement, ev: string, ms: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const t = window.setTimeout(() => {
       cleanup();

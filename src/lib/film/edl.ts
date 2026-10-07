@@ -265,7 +265,7 @@ export function buildFilm(inp: FilmInput): Film {
       const ps = plans.get(c.id) ?? [];
       ps.forEach((p, pi) => {
         push({
-          t: 'clip', dur: (p.to - p.from) / p.rate, clipId: c.id, from: p.from, to: p.to, rate: p.rate, factor: lapseFactor(c),
+          t: 'clip', dur: (p.to - p.from) / p.rate, clipId: c.id, from: p.from + (c.span?.[0] ?? 0), to: p.to + (c.span?.[0] ?? 0), rate: p.rate, factor: lapseFactor(c),
           audio: p.audio, badge: p.badge, part: [pi + 1, ps.length], index: idx + 1, ofArea: g.clips.length,
         });
       });

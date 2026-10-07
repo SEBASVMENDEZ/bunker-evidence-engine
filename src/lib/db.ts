@@ -145,6 +145,11 @@ export async function deleteFolder(id: string) {
 
 /** Obtiene el archivo de un clip, venga de una grabación propia o de un archivo original enlazado. */
 export async function clipFile(c: Clip, askPermission = false): Promise<Blob | null> {
+  // un tramo comparte el archivo del video del que salió
+  if (c.parentId) {
+    const parent = await (await db()).get('clips', c.parentId);
+    return parent ? clipFile(parent, askPermission) : null;
+  }
   const s = session.get(c.id);
   if (s) return s;
   const d = await db();

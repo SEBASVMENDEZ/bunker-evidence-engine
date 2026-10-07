@@ -3,7 +3,7 @@ export type ClipKind = 'proceso' | 'explicacion' | 'transicion' | 'reflexion' | 
 
 export type ClipSource = 'camara' | 'pantalla' | 'carpeta' | 'importado' | 'demo';
 
-export type AreaBy = 'rutina' | 'horario' | 'aprendido' | 'nombre' | 'manual' | 'camara' | 'ninguno';
+export type AreaBy = 'rutina' | 'horario' | 'aprendido' | 'nombre' | 'manual' | 'camara' | 'intencion' | 'ninguno';
 
 /** Cuándo ocurre un área respecto al turno de trabajo. */
 export type Moment = 'antes' | 'despues' | 'libre';
@@ -72,6 +72,12 @@ export interface Clip {
   realDuration?: number; // duración real estimada (archivo × velocidad)
   rotation?: number | null; // 90 trasera / 270 frontal (Android, en vertical)
   sig?: number[]; // firma visual del lugar
+  // ---- tramos: un video largo (p. ej. el bloque de la mañana) dividido por actividad ----
+  parentId?: string; // tramo de otro clip: comparte su archivo
+  span?: [number, number]; // segundos del archivo que cubre este tramo
+  lay?: number[]; // dónde está tu cuerpo en el cuadro (9×16), para reconocer la actividad
+  mot?: number; // cuánto te mueves
+  analyzed?: number; // versión del análisis de tramos ya aplicado
   width: number;
   height: number;
   thumb?: string;
@@ -151,6 +157,12 @@ export interface LinkedFolder {
   addedAt: number;
   lastScan?: number;
   found?: number;
+}
+
+/** "Voy a grabar X": un toque antes de grabar; el siguiente video queda en esa área. */
+export interface Intent {
+  areaId: string;
+  at: number;
 }
 
 export interface LearnSample {

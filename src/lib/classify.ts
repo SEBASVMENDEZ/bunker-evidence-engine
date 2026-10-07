@@ -8,6 +8,7 @@
 import type { Area, AreaBy, Clip, ClipKind, Moment, Shift, Shifts } from './types';
 import { dayKey, isoWeekday, minuteOfDay, parseHM } from './time';
 import { sigSimilarity } from './media';
+import { laySimilarity } from './tramos';
 
 export const CONFIRM_THRESHOLD = 0.6;
 
@@ -32,6 +33,13 @@ export const RHYTHM = {
   free: 0.15, // entrar a un área libre (reflexión, trading, proyecto) en cualquier momento
   under: 0.1, // un clip más corto que lo típico es un fragmento de la sesión: pesa poco en contra
   startSkip: 0.05, // el primer video del día puede caer en cualquier punto de la rutina
+  layW: 5, // forma y movimiento del cuerpo (tramos de un video largo), aprendidos de tus confirmaciones
+  layKnown: 0.8, // un tramo muy parecido a un área conocida descarta las áreas sin ejemplos
+  sameTramo: 3, // dos tramos seguidos del mismo video casi nunca son la misma actividad (por eso se dividió)
+  blockSkip: 1, // un bloque grabado de corrido casi siempre empieza donde empieza tu rutina
+  blockFree: 1.5, // dentro de un bloque grabado de corrido no se salta a un área libre (trading, proyecto…)
+  habitW: 0.5, // tu hora habitual para cada área (aprendida; útil frente al computador)
+  habitSigma: 60, // minutos
 };
 
 // ---------------- señales aprendidas: cámara y lugar ----------------
@@ -41,11 +49,15 @@ export const camOf = (rot?: number | null): Cam | null => (rot === 270 ? 'fronta
 export interface Signals {
   cam: Record<string, Record<Cam, number>>; // P(cámara | área)
   sigs: Record<string, number[][]>; // firmas de lugares confirmados por área
+  lays: Record<string, { lay: number[]; mot?: number }[]>; // forma del cuerpo en tramos confirmados
+  hours: Record<string, number[]>; // minuto del día de los videos confirmados
 }
 
 export function learnSignals(areas: Area[], clips: Clip[]): Signals {
   const cam: Signals['cam'] = {};
   const sigs: Signals['sigs'] = {};
+  const lays: Signals['lays'] = {};
+  const hours: Signals['hours'] = {};
   for (const a of areas) {
     // punto de partida: reflexión = cámara frontal; actividades = trasera (teléfono apoyado)
     const prior = a.kind === 'reflexion' ? { frontal: 3, trasera: 0.6 } : { frontal: 0.6, trasera: 3 };
@@ -57,8 +69,10 @@ export function learnSignals(areas: Area[], clips: Clip[]): Signals {
     const tot = prior.frontal + prior.trasera;
     cam[a.id] = { frontal: prior.frontal / tot, trasera: prior.trasera / tot };
     sigs[a.id] = anchored.filter((c) => c.sig?.length).slice(-40).map((c) => c.sig!);
+    lays[a.id] = anchored.filter((c) => c.lay?.length).slice(-30).map((c) => ({ lay: c.lay!, mot: c.mot }));
+    hours[a.id] = anchored.filter((c) => !c.parentId).slice(-60).map((c) => minuteOfDay(c.takenAt));
   }
-  return { cam, sigs };
+  return { cam, sigs, lays, hours };
 }
 
 const INF = 1e9;
@@ -67,7 +81,7 @@ function norm(s: string) {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
-export const isAnchor = (c: Clip) => c.areaBy === 'manual' || c.areaBy === 'camara';
+export const isAnchor = (c: Clip) => c.areaBy === 'manual' || c.areaBy === 'camara' || c.areaBy === 'intencion';
 
 /** Duración real (un time-lapse ×10 de 6 min es una sesión de 1 h). */
 export const realSecs = (c: Pick<Clip, 'duration' | 'realDuration'>) => c.realDuration ?? c.duration;
@@ -220,6 +234,40 @@ export function classifyDay(
     return max > -1 ? { byArea, max } : null;
   });
 
+  // forma y movimiento del cuerpo (tramos de videos largos) frente a tramos confirmados de cada área
+  const layout = clips.map((c) => {
+    if (!signals || !c.lay) return null;
+    const byArea: Record<string, number> = {};
+    let max = -Infinity;
+    for (const a of A) {
+      const sims = (signals.lays[a.id] ?? []).map((g) => laySimilarity(c, g)).filter((x): x is number => x !== null).sort((x, y) => y - x);
+      if (!sims.length) continue;
+      const v = sims.slice(0, 2).reduce((s, x) => s + x, 0) / Math.min(2, sims.length);
+      byArea[a.id] = v;
+      if (v > max) max = v;
+    }
+    return max > -Infinity ? { byArea, max } : null;
+  });
+  // tu hora habitual para cada área libre (con al menos 3 ejemplos confirmados)
+  const habit = (a: Area, c: Clip) => {
+    const hs = signals?.hours[a.id];
+    // solo frente al computador (áreas libres): la mañana ya la ordena tu rutina
+    if (a.moment !== 'libre' || !hs || hs.length < 3 || c.parentId) return 0;
+    const m = minuteOfDay(c.takenAt);
+    const sg = RHYTHM.habitSigma;
+    let k = 0;
+    for (const h of hs) {
+      const d = Math.min(Math.abs(m - h), 1440 - Math.abs(m - h));
+      k += Math.exp((-d * d) / (2 * sg * sg)) / (sg * Math.sqrt(2 * Math.PI));
+    }
+    const dens = (k + 2 / 1440) / (hs.length + 2);
+    return RHYTHM.habitW * Math.max(-1, Math.min(2, -Math.log(dens * 1440)));
+  };
+  const rootOf = (c: Clip) => (c.span ? (c.parentId ?? c.id) : null);
+  const sameVideo = clips.map((c, i) => i > 0 && rootOf(c) !== null && rootOf(c) === rootOf(clips[i - 1]));
+  // primer tramo de un bloque: normalmente empieza donde empieza tu rutina
+  const blockStart = clips.map((c, i) => !!c.span && !sameVideo[i] && i + 1 < n && sameVideo[i + 1]);
+
   // costo de emisión: qué tan bien encaja el video i con el área k
   const E: number[][] = clips.map((c, i) => {
     const anchored = isAnchor(c) && A.some((a) => a.id === c.areaId);
@@ -244,6 +292,9 @@ export function classifyDay(
         if (cm) e += RHYTHM.camW * -Math.log(signals.cam[a.id]?.[cm] ?? 0.5);
         const vis = visual[i];
         if (vis) e += RHYTHM.visW * Math.max(0, vis.max - (vis.byArea[a.id] ?? RHYTHM.visBase));
+        const lay = layout[i];
+        if (lay) e += RHYTHM.layW * Math.max(0, lay.max - (lay.byArea[a.id] ?? RHYTHM.layKnown));
+        e += habit(a, c);
       }
       // sin turno conocido: un cierre del día ("después") es poco probable en la mañana
       if (phases[i] === 'libre' && a.moment === 'despues' && minuteOfDay(c.takenAt) < 12 * 60) e += RHYTHM.morningClose;
@@ -260,7 +311,7 @@ export function classifyDay(
   // son libres: pueden aparecer en cualquier punto del día sin romper el orden.
   const ordered = A.map((a) => a.moment === 'antes');
   const skipCost = (from: number, to: number, i: number) => {
-    const w = from < 0 ? RHYTHM.startSkip : RHYTHM.skip;
+    const w = from < 0 ? (blockStart[i] ? RHYTHM.blockSkip : RHYTHM.startSkip) : RHYTHM.skip;
     let s = 0;
     for (let k = from + 1; k < to; k++) if (ordered[k] && compatible(A[k].moment, phases[i])) s += w;
     return s;
@@ -288,14 +339,15 @@ export function classifyDay(
   const stepCost = (s1: number, s2: number, i: number) => {
     const a = states[s1];
     const b = states[s2];
-    if (ordered[b.k]) return transOrdered(a.o, b.k, i);
+    const same = sameVideo[i] && a.k === b.k ? RHYTHM.sameTramo : 0;
+    if (ordered[b.k]) return transOrdered(a.o, b.k, i) + same;
     if (b.o !== a.o) return INF;
-    return a.k === b.k && gapOf(i) < RHYTHM.blockGap ? RHYTHM.repeatClose : RHYTHM.free;
+    return (a.k === b.k && gapOf(i) < RHYTHM.blockGap ? RHYTHM.repeatClose : RHYTHM.free) + same + (sameVideo[i] || blockStart[i] ? RHYTHM.blockFree : 0);
   };
   const startCost = (s: number) => {
     const st = states[s];
     if (ordered[st.k]) return skipCost(-1, st.k, 0);
-    return st.o < 0 ? RHYTHM.free : INF;
+    return st.o < 0 ? RHYTHM.free + (blockStart[0] ? RHYTHM.blockFree : 0) : INF;
   };
 
   // hacia adelante y hacia atrás (min-sum) para obtener marginales y confianza

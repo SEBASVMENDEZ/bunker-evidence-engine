@@ -178,6 +178,7 @@ export function KindBadge({ kind }: { kind: Clip['kind'] }) {
 }
 
 export function ClipThumb({ clip, area, onClick, showDate = false }: { clip: Clip; area?: Area; onClick?: () => void; showDate?: boolean }) {
+  const analyzing = useStore((s) => (s.analyzing?.id === clip.id ? s.analyzing.p : null));
   return (
     <motion.div
       layout
@@ -211,6 +212,7 @@ export function ClipThumb({ clip, area, onClick, showDate = false }: { clip: Cli
           </span>
         )}
         {clip.source === 'demo' && <span className="glass-pill">DEMO</span>}
+        {clip.span && <span className="glass-pill" title="Parte de un video con varias actividades">TRAMO</span>}
         {clip.lapse && (
           <span className="glass-pill" style={{ color: '#7DD3FC' }} title="Time-lapse">
             ×{clip.realDuration && clip.duration ? Math.round(clip.realDuration / clip.duration) : clip.speed ?? '?'}
@@ -221,7 +223,7 @@ export function ClipThumb({ clip, area, onClick, showDate = false }: { clip: Cli
       <div className="meta">
         <span className="mono">{showDate ? new Date(clip.takenAt).toLocaleDateString('es', { weekday: 'short', day: 'numeric' }) + ' · ' : ''}{hm(clip.takenAt)}</span>
         <span className="mono">
-          {clip.status === 'pendiente' ? <span className="pulse">procesando…</span> : clip.status === 'sin-acceso' ? 'sin acceso' : clip.status === 'error' ? 'error' : clip.lapse ? `≈ ${fmtDuration(clip.realDuration ?? clip.duration)}` : fmtDuration(clip.duration)}
+          {analyzing !== null ? <span className="pulse">buscando actividades {Math.round(analyzing * 100)}%</span> : clip.status === 'pendiente' ? <span className="pulse">procesando…</span> : clip.status === 'sin-acceso' ? 'sin acceso' : clip.status === 'error' ? 'error' : clip.lapse ? `≈ ${fmtDuration(clip.realDuration ?? clip.duration)}` : fmtDuration(clip.duration)}
         </span>
       </div>
       <span className="edge" />

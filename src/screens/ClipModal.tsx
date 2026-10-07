@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { X, Star, EyeOff, Eye, Trash2, Calendar, HardDrive, Info, KeyRound, Upload } from 'lucide-react';
-import { useStore } from '../store';
+import { X, Star, EyeOff, Eye, Trash2, Calendar, HardDrive, Info, KeyRound, Upload, Scissors, Merge } from 'lucide-react';
+import { useStore, tramosOf } from '../store';
+import { makeThumb, visualSig } from '../lib/media';
 import { AreaIcon } from '../components/ui';
 import { clipFile } from '../lib/db';
 import { KIND_INFO } from '../lib/content';
@@ -16,6 +17,7 @@ const BY: Record<string, string> = {
   nombre: 'por el nombre del archivo',
   manual: 'elegida por ti',
   camara: 'elegida al grabar',
+  intencion: 'por tu marca “Voy a grabar”',
   ninguno: 'sin pistas suficientes',
 };
 
@@ -34,6 +36,10 @@ export default function ClipModal({ id }: { id: string }) {
   const updateClip = useStore((s) => s.updateClip);
   const removeClip = useStore((s) => s.removeClip);
   const importFiles = useStore((s) => s.importFiles);
+  const splitTramo = useStore((s) => s.splitTramo);
+  const mergeTramo = useStore((s) => s.mergeTramo);
+  const allClips = useStore((s) => s.clips);
+  const tramos = useMemo(() => (clip ? tramosOf(allClips, clip) : []), [allClips, clip]);
   const galleryRef = useRef<HTMLInputElement>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [needsPerm, setNeedsPerm] = useState(false);
@@ -70,7 +76,19 @@ export default function ClipModal({ id }: { id: string }) {
       <motion.div className="modal" initial={{ y: 30, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 20, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ position: 'relative', background: '#000', borderRadius: '28px 28px 0 0', overflow: 'hidden', aspectRatio: '16/9', maxHeight: '56vh', width: '100%' }}>
           {url ? (
-            <video ref={videoRef} src={url} controls autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <video
+              ref={videoRef}
+              src={url}
+              controls
+              autoPlay
+              playsInline
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              onLoadedMetadata={(e) => clip.span && (e.currentTarget.currentTime = clip.span[0])}
+              onTimeUpdate={(e) => {
+                const v = e.currentTarget;
+                if (clip.span && !v.paused && v.currentTime >= clip.span[1]) v.pause();
+              }}
+            />
           ) : clip.thumb ? (
             <img src={clip.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'brightness(.6)' }} />
           ) : null}
@@ -132,6 +150,49 @@ export default function ClipModal({ id }: { id: string }) {
             </div>
           </div>
 
+          {tramos.length > 1 && (
+            <div className="col" style={{ gap: 6, marginTop: 12 }}>
+              <div className="label">Este video tiene {tramos.length} actividades · toca una para verla</div>
+              <div style={{ display: 'flex', height: 32, borderRadius: 12, overflow: 'hidden', gap: 2 }}>
+                {tramos.map((t) => {
+                  const a = areas.find((x) => x.id === t.areaId);
+                  const on = t.id === clip.id;
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => useStore.getState().openClip(t.id)}
+                      title={`${a?.name ?? 'Sin área'} · ${fmtDuration(t.duration)}`}
+                      style={{ flex: Math.max(0.6, (t.span?.[1] ?? 1) - (t.span?.[0] ?? 0)), minWidth: 0, background: a?.color ?? '#475569', opacity: on ? 1 : 0.5, outline: on ? '2px solid #fff' : 'none', outlineOffset: -2, color: '#0A0F1E', fontSize: 11.5, fontWeight: 700, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', padding: '0 6px', border: 0 }}
+                    >
+                      {a?.name ?? '?'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {clip.source !== 'demo' && url && (clip.span ? clip.span[1] - clip.span[0] : clip.duration) >= 30 && (
+            <div className="row wrap" style={{ gap: 6, marginTop: 10 }}>
+              <button
+                className="btn sm"
+                onClick={() => {
+                  const v = videoRef.current;
+                  if (v) splitTramo(clip.id, v.currentTime, makeThumb(v), visualSig(v));
+                }}
+              >
+                <Scissors size={14} /> Dividir en este punto
+              </button>
+              {tramos.length > 1 && (
+                <button className="btn sm" onClick={() => mergeTramo(clip.id)}>
+                  <Merge size={14} /> {tramos[0]?.id === clip.id ? 'Unir con el siguiente' : 'Unir con el anterior'}
+                </button>
+              )}
+              <span className="tiny muted" style={{ flexBasis: '100%' }}>
+                ¿Grabaste varias actividades seguidas? Pausa donde empieza la siguiente y toca Dividir; luego elige el área de cada parte. Búnker aprende cómo se ve cada una.
+              </span>
+            </div>
+          )}
+
           <div className="sep" />
           <div className="label">Área</div>
           <div className="row wrap" style={{ gap: 6 }}>
@@ -151,7 +212,7 @@ export default function ClipModal({ id }: { id: string }) {
           </div>
           <div className="tiny muted row" style={{ gap: 6 }}>
             <Info size={12} /> Asignada {BY[clip.areaBy]}
-            {clip.areaBy !== 'manual' && clip.areaBy !== 'camara' && ` · confianza ${Math.round(clip.confidence * 100)}%`}
+            {clip.areaBy !== 'manual' && clip.areaBy !== 'camara' && clip.areaBy !== 'intencion' && ` · confianza ${Math.round(clip.confidence * 100)}%`}
           </div>
 
           <div className="label" style={{ marginTop: 10 }}>Tratamiento en la película</div>

@@ -29,6 +29,8 @@ export default function Hoy() {
   const sheet = useStore((s) => s.sheet);
   const setTurnos = useStore((s) => s.setTurnos);
   const queue = useStore((s) => s.queue);
+  const intents = useStore((s) => s.intents);
+  const setIntent = useStore((s) => s.setIntent);
 
   const now = new Date();
   const today = dayKey(now);
@@ -61,6 +63,10 @@ export default function Hoy() {
           ? `En turno hasta las ${shiftToday.end}`
           : `Turno terminado (${shiftToday.start}–${shiftToday.end})`;
   const allDone = todayAreas.length > 0 && todayAreas.every((a) => doneToday.has(a.id));
+  // frente al computador (trading, estudio, proyecto) la cámara ve lo mismo: un toque antes de grabar lo resuelve
+  const deskAreas = active.filter((a) => a.moment === 'libre');
+  const lastIntent = intents[intents.length - 1];
+  const pendingIntent = lastIntent && Date.now() - lastIntent.at < 45 * 60000 ? lastIntent : null;
 
   const record = (areaId?: string) => {
     sound.play('tap');
@@ -220,6 +226,23 @@ export default function Hoy() {
                     </button>
                   )}
                 </div>
+                {deskAreas.length > 0 && (
+                  <div className="col" style={{ gap: 6, marginTop: 16 }}>
+                    <div className="tiny muted">¿Vas a grabar con la cámara del celular? Un toque y tu próximo video queda en su lugar:</div>
+                    <div className="row wrap" style={{ gap: 6 }}>
+                      {deskAreas.map((a) => (
+                        <button key={a.id} className={`chip${pendingIntent?.areaId === a.id ? ' on' : ''}`} style={{ ['--c' as string]: a.color }} onClick={() => setIntent(a.id)}>
+                          <span className="dot" /> {a.name}
+                        </button>
+                      ))}
+                    </div>
+                    {pendingIntent && (
+                      <div className="tiny" style={{ color: 'var(--ok)' }}>
+                        ✓ Tu próximo video será {areas.find((a) => a.id === pendingIntent.areaId)?.name} · marcado a las {hm(pendingIntent.at)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </motion.section>

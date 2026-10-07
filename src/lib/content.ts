@@ -39,9 +39,14 @@ export const DEFAULT_AREAS: Area[] = [
     aliases: ['proyecto', 'project', 'codigo', 'app', 'build'], order: 6, active: true,
   },
   {
+    id: 'estudio', name: 'Estudio', icon: 'estudio', color: '#E879F9', life: 'crecimiento', kind: 'explicacion',
+    moment: 'libre', minutes: 45, windows: [], targetPerWeek: 5,
+    aliases: ['estudio', 'estudiar', 'curso', 'clase', 'study'], order: 7, active: true,
+  },
+  {
     id: 'reflexion', name: 'Reflexión', icon: 'reflexion', color: '#FB923C', life: 'comunicacion', kind: 'reflexion',
     moment: 'despues', minutes: 3, windows: [], targetPerWeek: 3,
-    aliases: ['reflexion', 'mensaje', 'cierre', 'diario', 'vlog'], order: 7, active: true,
+    aliases: ['reflexion', 'mensaje', 'cierre', 'diario', 'vlog'], order: 8, active: true,
   },
 ];
 
@@ -131,7 +136,7 @@ export const EMOTIONS = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
-  version: 2,
+  version: 3,
   userName: '',
   scheduleName: '',
   onboarded: false,

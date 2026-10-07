@@ -53,6 +53,16 @@ Una hora de estudio grabada a ×10 es un archivo de 6 minutos. Búnker detecta l
 
 Nada se etiqueta ni se renombra. Los originales **nunca** se copian, mueven ni borran (salvo que tú los quites).
 
+### Bloques: varias actividades en un solo video
+
+Si grabas el bloque de la mañana de corrido (oración → meditación → estiramiento → lectura), Búnker lo divide solo en **tramos**. Con la cámara fija, cada actividad tiene su postura y su sitio en el cuadro: se toman ~160 cuadros, se compara cada uno con el fondo y se buscan los cortes que mejor separan el video. Un corte solo cuenta si te cambias de sitio o pasas de estar quieto a moverte (cambiar de postura en la misma silla no es otra actividad). Cada tramo se clasifica con el orden de tu rutina y, después de tu primera confirmación, con la forma de tu cuerpo en cada actividad.
+
+Medido con 12 videos reales: 12/12 bien divididos (bloques en 2–3 tramos; ejercicio y sesiones de computador sin cortes) y 22/22 tramos reconocidos entre días. Si algo queda mal, en el clip: **Dividir en este punto** o **Unir**, y elegir el área.
+
+### Frente al computador: trading, estudio, proyecto
+
+Con la cámara mirándote, las tres se ven iguales. Un toque **antes** de grabar lo resuelve: en *Hoy*, “¿Vas a grabar con la cámara del celular?” → Trading / Estudio / Proyecto, o mantén presionado el ícono de Búnker → *Grabo: Trading*. El primer video que empiece en los siguientes 45 minutos queda en esa área, sin preguntas. Sin marca, Búnker usa tu hora habitual de cada área (aprendida) y te pregunta con las opciones más probables primero.
+
 ### El domingo: una sola pieza
 
 1. **Hoy** te muestra “Tu película de la semana está lista” → *Ver mi película*.
