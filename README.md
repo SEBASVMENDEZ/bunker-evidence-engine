@@ -53,6 +53,17 @@ Una hora de estudio grabada a ×10 es un archivo de 6 minutos. Búnker detecta l
 
 Nada se etiqueta ni se renombra. Los originales **nunca** se copian, mueven ni borran (salvo que tú los quites).
 
+### Tu Ruta: el plan del día que se arma solo
+
+En *Hoy*, Búnker no te da una lista: te dice **qué toca ahora** y lo empiezas con un botón.
+
+- **El sueño es el ancla.** Con tu turno, tu traslado y las horas que necesitas, calcula a qué hora acostarte para tener mañana. Si vienes acostándote tarde, planea con tu hora real y la adelanta 15 min por noche (y nunca te planea menos de tu sueño mínimo antes de trabajar).
+- **Nunca cero.** Cada hábito tiene versión mínima (oración 3 min, meditación 3, estiramiento 5, lectura 5…) y completa. En un día pesado se hace el mínimo de todo; cuando hay tiempo, crecen. Lo que no cabe sube de prioridad mañana (nunca dos ceros seguidos).
+- **Días libres = vacaciones.** Sin turno, vuelve la rutina completa en la mañana, en orden.
+- **¿Cómo amaneciste?** Un toque en la mañana (cansado / normal / con energía) ajusta la ruta: cansado → solo crecen los hábitos tranquilos y queda más aire.
+- **Sesión guiada.** *Empezar* abre un cronómetro a pantalla completa que te lleva de un hábito al siguiente con voz y campana; no tienes que mirar el teléfono. *Solo el mínimo*, *Más tarde* y *Ya lo hice* para los días reales.
+- **Mi día** (icono de ajustes en la tarjeta): sueño, traslado, alistarte, al llegar, tiempo para ti antes de salir, y la versión mínima/completa y prioridad (★) de cada hábito.
+
 ### Bloques: varias actividades en un solo video
 
 Si grabas el bloque de la mañana de corrido (oración → meditación → estiramiento → lectura), Búnker lo divide solo en **tramos**. Con la cámara fija, cada actividad tiene su postura y su sitio en el cuadro: se toman ~160 cuadros, se compara cada uno con el fondo y se buscan los cortes que mejor separan el video. Un corte solo cuenta si te cambias de sitio o pasas de estar quieto a moverte (cambiar de postura en la misma silla no es otra actividad). Cada tramo se clasifica con el orden de tu rutina y, después de tu primera confirmación, con la forma de tu cuerpo en cada actividad.

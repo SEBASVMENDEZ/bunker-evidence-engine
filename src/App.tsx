@@ -16,6 +16,8 @@ import FilmPlayer from './screens/FilmPlayer';
 import ClipModal from './screens/ClipModal';
 import Calma from './screens/Calma';
 import { TurnosModal } from './components/Turnos';
+import Sesion from './screens/Sesion';
+import { MiDia } from './components/Ruta';
 
 const NAV: { id: Route; label: string; icon: typeof House }[] = [
   { id: 'hoy', label: 'Hoy', icon: House },
@@ -201,6 +203,8 @@ export default function App() {
   const clipModal = useStore((s) => s.clipModal);
   const calmOpen = useStore((s) => s.calmOpen);
   const turnosOpen = useStore((s) => s.turnosOpen);
+  const sesion = useStore((s) => s.sesion);
+  const miDiaOpen = useStore((s) => s.miDiaOpen);
 
   useEffect(() => {
     init();
@@ -252,6 +256,8 @@ export default function App() {
       <AnimatePresence>{clipModal && <ClipModal key="clip" id={clipModal} />}</AnimatePresence>
       <AnimatePresence>{calmOpen && <Calma key="calm" />}</AnimatePresence>
       <AnimatePresence>{turnosOpen && <TurnosModal key="turnos" />}</AnimatePresence>
+      <AnimatePresence>{miDiaOpen && <MiDia key="midia" />}</AnimatePresence>
+      <AnimatePresence>{sesion && <Sesion key="sesion" />}</AnimatePresence>
       <Toasts />
     </>
   );

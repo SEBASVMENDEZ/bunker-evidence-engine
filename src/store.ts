@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { Area, CalmLog, Clip, Compass, DailyLog, Intent, LearnSample, LinkedFolder, Settings, SheetLink, Shift, Shifts, WeekReview } from './lib/types';
+import type { Area, CalmLog, Clip, Compass, DailyLog, DayPrefs, Energy, Hecho, Intent, LearnSample, LinkedFolder, Settings, SheetLink, Shift, Shifts, SleepLog, WeekReview } from './lib/types';
+import { DEFAULT_DAY } from './lib/ruta';
 import * as DB from './lib/db';
 import { DEFAULT_AREAS, DEFAULT_COMPASS, DEFAULT_SETTINGS } from './lib/content';
 import { inferKind, isAnchor, markRepetitions, reclassify, CONFIRM_THRESHOLD } from './lib/classify';
@@ -49,6 +50,12 @@ interface State {
   storage: { usage: number; quota: number; persisted: boolean };
   intents: Intent[];
   analyzing: { id: string; p: number } | null;
+  // ---- Tu Ruta ----
+  hechos: Hecho[];
+  sleep: SleepLog;
+  postponed: Record<string, number>; // "más tarde" de hoy: área → no antes de
+  sesion: { title: string; steps: { areaId: string; minutes: number }[] } | null;
+  miDiaOpen: boolean;
 
   init: () => Promise<void>;
   go: (r: Route) => void;
@@ -89,7 +96,18 @@ interface State {
   splitTramo: (id: string, at: number, thumb?: string, sig?: number[]) => void;
   /** Une un tramo con el anterior (o el primero con el siguiente). */
   mergeTramo: (id: string) => Promise<void>;
+  addHecho: (areaId: string, minutes: number, via: Hecho['via']) => void;
+  removeHecho: (id: string) => void;
+  logWake: (energy: Energy) => void;
+  logBed: () => void;
+  setDayPrefs: (p: Partial<DayPrefs>) => void;
+  postpone: (areaIds: string[], minutes: number) => void;
+  openSesion: (s: State['sesion']) => void;
+  setMiDia: (v: boolean) => void;
 }
+
+/** Tus preferencias del día (con los valores por defecto donde no hayas elegido). */
+export const dayPrefsOf = (st: Settings): DayPrefs => ({ ...DEFAULT_DAY, ...st.day });
 
 /** ¿Este video largo aún no se ha revisado por si trae varias actividades seguidas? */
 export const needsTramos = (c: Clip) =>
@@ -387,9 +405,14 @@ export const useStore = create<State>((set, get) => {
     storage: { usage: 0, quota: 0, persisted: false },
     intents: [],
     analyzing: null,
+    hechos: [],
+    sleep: { beds: [], wakes: {} },
+    postponed: {},
+    sesion: null,
+    miDiaOpen: false,
 
     init: async () => {
-      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents] = await Promise.all([
+      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents, hechos, sleep] = await Promise.all([
         DB.kvGet<Settings>('settings'),
         DB.kvGet<Area[]>('areas'),
         DB.kvGet<Compass>('compass'),
@@ -402,6 +425,8 @@ export const useStore = create<State>((set, get) => {
         DB.kvGet<Shifts>('shifts'),
         DB.kvGet<SheetLink>('sheet'),
         DB.kvGet<Intent[]>('intents'),
+        DB.kvGet<Hecho[]>('hechos'),
+        DB.kvGet<SleepLog>('sueno'),
       ]);
       const st: Settings = { ...DEFAULT_SETTINGS, ...settings, camera: { ...DEFAULT_SETTINGS.camera, ...settings?.camera } };
       const def = new Map(DEFAULT_AREAS.map((a) => [a.id, a]));
@@ -447,6 +472,8 @@ export const useStore = create<State>((set, get) => {
         shifts: shifts ?? {},
         sheet: sheet ?? null,
         intents: intents ?? [],
+        hechos: hechos ?? [],
+        sleep: sleep ?? { beds: [], wakes: {} },
         ready: true,
       });
       if (migrate) reclass('all');
@@ -997,6 +1024,49 @@ export const useStore = create<State>((set, get) => {
       reclass(new Set([dayKey(merged.takenAt), dayKey(drop.takenAt)]));
       get().openClip(merged.id);
     },
+
+    addHecho: (areaId, minutes, via) => {
+      const h: Hecho = { id: uid('h_'), day: dayKey(Date.now()), areaId, at: Date.now(), minutes: Math.max(1, Math.round(minutes)), via };
+      const hechos = [...get().hechos, h].slice(-2000);
+      set({ hechos });
+      DB.kvSet('hechos', hechos);
+    },
+
+    removeHecho: (id) => {
+      const hechos = get().hechos.filter((h) => h.id !== id);
+      set({ hechos });
+      DB.kvSet('hechos', hechos);
+    },
+
+    logWake: (energy) => {
+      const today = dayKey(Date.now());
+      const prev = get().sleep.wakes[today];
+      const sleep: SleepLog = { ...get().sleep, wakes: { ...get().sleep.wakes, [today]: { at: prev?.at ?? Date.now(), energy } } };
+      set({ sleep });
+      DB.kvSet('sueno', sleep);
+      sound.play('pop');
+    },
+
+    logBed: () => {
+      const sleep: SleepLog = { ...get().sleep, beds: [...get().sleep.beds, Date.now()].slice(-60) };
+      set({ sleep });
+      DB.kvSet('sueno', sleep);
+      sound.play('seal');
+      get().toast('Buenas noches. Mañana tu ruta ya está lista.', 'ok');
+    },
+
+    setDayPrefs: (p) => {
+      get().setSettings({ day: { ...dayPrefsOf(get().settings), ...p } });
+    },
+
+    postpone: (areaIds, minutes) => {
+      const until = Date.now() + minutes * 60000;
+      set({ postponed: { ...get().postponed, ...Object.fromEntries(areaIds.map((a) => [a, until])) } });
+      sound.play('tap');
+    },
+
+    openSesion: (sesion) => set({ sesion }),
+    setMiDia: (miDiaOpen) => set({ miDiaOpen }),
 
     refreshStorage: async () => {
       try {

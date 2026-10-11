@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flame, Play, Video, ChevronDown, Clapperboard, Wind, FolderSync, Sparkles, Quote, RefreshCw, Briefcase, Waves, X, Upload } from 'lucide-react';
-import { useStore, needsConfirm } from '../store';
+import { useStore } from '../store';
 import { AreaIcon, RoutineRing, Counter, Section } from '../components/ui';
-import { nextInRoutine } from '../lib/classify';
 import { computeWeek, streak } from '../lib/insights';
 import { DAILY_QUESTIONS, PRINCIPLES } from '../lib/content';
 import { DAY_SHORT, dayKey, fmtDayLong, fmtDuration, greeting, hm, isoWeekday, weekDays, weekKey, weekNumber } from '../lib/time';
 import { sound } from '../lib/sound';
+import { RutaHoy } from '../components/Ruta';
 
 export default function Hoy() {
   const settings = useStore((s) => s.settings);
@@ -29,45 +29,25 @@ export default function Hoy() {
   const sheet = useStore((s) => s.sheet);
   const setTurnos = useStore((s) => s.setTurnos);
   const queue = useStore((s) => s.queue);
-  const intents = useStore((s) => s.intents);
-  const setIntent = useStore((s) => s.setIntent);
 
   const now = new Date();
   const today = dayKey(now);
   const week = weekKey(now);
   const active = useMemo(() => areas.filter((a) => a.active).sort((a, b) => a.order - b.order), [areas]);
   const todays = useMemo(() => clips.filter((c) => dayKey(c.takenAt) === today && !c.excluded), [clips, today]);
-  const doneToday = useMemo(() => new Set(todays.map((c) => c.areaId).filter(Boolean) as string[]), [todays]);
+  const hechos = useStore((s) => s.hechos);
+  // hecho = con evidencia o con la sesión guiada / marcado a mano
+  const doneToday = useMemo(() => new Set([...(todays.map((c) => c.areaId).filter(Boolean) as string[]), ...hechos.filter((h) => h.day === today).map((h) => h.areaId)]), [todays, hechos, today]);
   const stats = useMemo(() => computeWeek(clips, areas, week), [clips, areas, week]);
   const st = useMemo(() => streak(clips), [clips]);
-  const shiftToday = shifts[today];
-  const ns = nextInRoutine(areas, todays, shiftToday, now);
-  const target = ns.next;
   const isSunday = isoWeekday(now) === 7;
   const review = reviews[week];
   // tras sellar el domingo, el experimento nuevo ya es el activo (empieza mañana)
   const prevWeekReview = review?.sealedAt ? review : reviews[weekKey(now.getTime() - 7 * 864e5)];
   const startsTomorrow = !!review?.sealedAt;
   const principle = PRINCIPLES[(Math.floor(now.getTime() / 864e5) + 3) % PRINCIPLES.length];
-  const unsure = clips.filter(needsConfirm).length;
   const dayIndex = isoWeekday(now) - 1;
   const todayAreas = active;
-  const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`);
-  const shiftLine = !shiftToday
-    ? 'Marcar el turno de hoy'
-    : shiftToday.off
-      ? 'Hoy descansas'
-      : ns.minutesToStart !== null
-        ? `Turno ${shiftToday.start}–${shiftToday.end} · entras en ${fmtMin(ns.minutesToStart)}`
-        : ns.minutesToEnd !== null
-          ? `En turno hasta las ${shiftToday.end}`
-          : `Turno terminado (${shiftToday.start}–${shiftToday.end})`;
-  const allDone = todayAreas.length > 0 && todayAreas.every((a) => doneToday.has(a.id));
-  // frente al computador (trading, estudio, proyecto) la cámara ve lo mismo: un toque antes de grabar lo resuelve
-  const deskAreas = active.filter((a) => a.moment === 'libre');
-  const lastIntent = intents[intents.length - 1];
-  const pendingIntent = lastIntent && Date.now() - lastIntent.at < 45 * 60000 ? lastIntent : null;
-
   const record = (areaId?: string) => {
     sound.play('tap');
     if (areaId) sessionStorage.setItem('bunker-area', areaId);
@@ -132,44 +112,12 @@ export default function Hoy() {
         )}
       </AnimatePresence>
 
-      {clips.length === 0 && (
-        <motion.div className="card gradient-border" style={{ marginBottom: 18 }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="row wrap between" style={{ gap: 16 }}>
-            <div className="grow">
-              <div className="eyebrow">Primer paso</div>
-              <h3 style={{ fontSize: 20, marginTop: 4 }}>
-                {supportsFolders ? 'Conecta tu evidencia una sola vez. Después, nada más que grabar.' : 'Graba como siempre. Luego tráelos con un toque.'}
-              </h3>
-              <p className="muted small" style={{ marginTop: 6 }}>
-                {supportsFolders
-                  ? 'Vincula la carpeta donde llegan los videos de tu celular (Google Drive, OneDrive, Fotos de Windows…) o graba aquí mismo con la Búnker Camera.'
-                  : 'Toca Importar y elige los videos del día en tu galería: Búnker los lee y los ordena sin copiarlos, así no te ocupa más espacio.'}
-              </p>
-            </div>
-            <div className="row wrap">
-              <button className="btn" onClick={() => loadDemo()}>
-                <Sparkles size={16} /> Ver una semana demo
-              </button>
-              {supportsFolders ? (
-                <button className="btn primary" onClick={() => linkFolder()}>
-                  <FolderSync size={16} /> Vincular carpeta
-                </button>
-              ) : (
-                <>
-                  <input ref={fileRef} type="file" accept="video/*" multiple hidden onChange={(e) => { importFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
-                  <button className="btn primary" onClick={() => fileRef.current?.click()}>
-                    <Upload size={16} /> Importar videos
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </motion.div>
-      )}
-
       <div className="grid g-3">
         {/* AHORA / DOMINGO */}
-        {isSunday && !review?.sealedAt ? (
+        {/* TU RUTA: el siguiente paso, ya decidido */}
+        <RutaHoy />
+
+        {isSunday && !review?.sealedAt && (
           <motion.section className="card span-2 gradient-border" style={{ overflow: 'hidden', minHeight: 300 }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
             <SundayPoster week={week} />
             <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'flex-end', minHeight: 256 }}>
@@ -185,64 +133,6 @@ export default function Hoy() {
                 <button className="btn lg" onClick={() => go('domingo')}>
                   <Clapperboard size={18} /> Revisión completa
                 </button>
-              </div>
-            </div>
-          </motion.section>
-        ) : (
-          <motion.section className="card span-2" style={{ overflow: 'hidden' }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
-            <div
-              style={{
-                position: 'absolute', inset: 0, borderRadius: 'inherit', pointerEvents: 'none',
-                background: `radial-gradient(600px 300px at 15% 30%, ${target?.color ?? '#34D399'}33, transparent 70%)`,
-              }}
-            />
-            <div className="row wrap" style={{ gap: 26, position: 'relative', minHeight: 236 }}>
-              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}>
-                <AreaIcon area={target ?? { icon: 'chispa', color: '#34D399' }} size={128} />
-              </motion.div>
-              <div className="grow" style={{ minWidth: 220 }}>
-                <button className="chip" onClick={() => setTurnos(true)} style={{ ['--c' as string]: shiftToday?.off ? '#FB7185' : '#34D399' }}>
-                  <Briefcase size={14} /> {shiftLine}
-                </button>
-                <div className="eyebrow" style={{ marginTop: 14 }}>{ns.phase === 'durante' ? 'Al salir del trabajo' : allDone ? 'Hoy' : 'Siguiente en tu rutina'}</div>
-                <h2 style={{ fontSize: 'clamp(30px,4vw,48px)', marginTop: 4 }}>{allDone ? 'Rutina completa' : target?.name ?? 'Día libre'}</h2>
-                <p className="muted" style={{ marginTop: 4 }}>
-                  {allDone
-                    ? 'Registraste todas tus áreas hoy. Persona completa, no perfecta.'
-                    : ns.phase === 'durante'
-                      ? `Estás trabajando. Cuando salgas, sigue ${target?.name ?? 'tu rutina'}.`
-                      : ns.minutesToStart !== null && ns.pendingBefore > 0
-                        ? `${ns.pendingBefore === 1 ? 'Te falta 1 área' : `Te faltan ${ns.pendingBefore} áreas`} antes de entrar. Coloca el teléfono, un toque y continúa.`
-                        : 'Coloca el teléfono, un toque y continúa. Búnker reconoce cada video por el orden de tu rutina, sin horarios.'}
-                </p>
-                <div className="row wrap" style={{ marginTop: 18 }}>
-                  <button className="btn primary lg" onClick={() => record(target?.id)} style={{ background: 'linear-gradient(135deg,#ff8a9b,#f43f5e 55%,#be123c)', boxShadow: '0 14px 34px -10px rgba(244,63,94,.7), inset 0 1px 0 rgba(255,255,255,.35)' }}>
-                    <span style={{ width: 10, height: 10, borderRadius: 9, background: 'white' }} />
-                    Grabar {allDone ? '' : target?.name ?? ''}
-                  </button>
-                  {unsure > 0 && (
-                    <button className="btn lg" onClick={() => go('evidencia')}>
-                      {unsure} por confirmar
-                    </button>
-                  )}
-                </div>
-                {deskAreas.length > 0 && (
-                  <div className="col" style={{ gap: 6, marginTop: 16 }}>
-                    <div className="tiny muted">¿Vas a grabar con la cámara del celular? Un toque y tu próximo video queda en su lugar:</div>
-                    <div className="row wrap" style={{ gap: 6 }}>
-                      {deskAreas.map((a) => (
-                        <button key={a.id} className={`chip${pendingIntent?.areaId === a.id ? ' on' : ''}`} style={{ ['--c' as string]: a.color }} onClick={() => setIntent(a.id)}>
-                          <span className="dot" /> {a.name}
-                        </button>
-                      ))}
-                    </div>
-                    {pendingIntent && (
-                      <div className="tiny" style={{ color: 'var(--ok)' }}>
-                        ✓ Tu próximo video será {areas.find((a) => a.id === pendingIntent.areaId)?.name} · marcado a las {hm(pendingIntent.at)}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </motion.section>
@@ -355,6 +245,43 @@ export default function Hoy() {
         <DailyBoard date={today} />
         <TodayList todays={todays} />
       </div>
+      {clips.length === 0 && (
+        // primero tu ruta; conectar la evidencia es el paso siguiente
+
+        <motion.div className="card gradient-border" style={{ marginBottom: 18 }} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="row wrap between" style={{ gap: 16 }}>
+            <div className="grow">
+              <div className="eyebrow">Primer paso</div>
+              <h3 style={{ fontSize: 20, marginTop: 4 }}>
+                {supportsFolders ? 'Conecta tu evidencia una sola vez. Después, nada más que grabar.' : 'Graba como siempre. Luego tráelos con un toque.'}
+              </h3>
+              <p className="muted small" style={{ marginTop: 6 }}>
+                {supportsFolders
+                  ? 'Vincula la carpeta donde llegan los videos de tu celular (Google Drive, OneDrive, Fotos de Windows…) o graba aquí mismo con la Búnker Camera.'
+                  : 'Toca Importar y elige los videos del día en tu galería: Búnker los lee y los ordena sin copiarlos, así no te ocupa más espacio.'}
+              </p>
+            </div>
+            <div className="row wrap">
+              <button className="btn" onClick={() => loadDemo()}>
+                <Sparkles size={16} /> Ver una semana demo
+              </button>
+              {supportsFolders ? (
+                <button className="btn primary" onClick={() => linkFolder()}>
+                  <FolderSync size={16} /> Vincular carpeta
+                </button>
+              ) : (
+                <>
+                  <input ref={fileRef} type="file" accept="video/*" multiple hidden onChange={(e) => { importFiles([...(e.target.files ?? [])]); e.target.value = ''; }} />
+                  <button className="btn primary" onClick={() => fileRef.current?.click()}>
+                    <Upload size={16} /> Importar videos
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {!settings.userName && (
         <div className="row" style={{ marginTop: 18 }}>
           <input className="input" style={{ maxWidth: 280 }} placeholder="¿Cómo te llamas?" onBlur={(e) => e.target.value && setSettings({ userName: e.target.value.trim() })} />

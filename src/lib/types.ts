@@ -50,6 +50,11 @@ export interface Area {
   aliases: string[];
   order: number;
   active: boolean;
+  // ---- Tu Ruta ----
+  minimum?: number; // versión mínima en minutos (lo que mantiene viva la cadena)
+  ideal?: number; // versión completa en minutos
+  energy?: Energy; // cuánta energía pide
+  priority?: number; // 1 baja · 2 normal · 3 alta
 }
 
 export interface Clip {
@@ -159,6 +164,35 @@ export interface LinkedFolder {
   found?: number;
 }
 
+export type Energy = 'baja' | 'media' | 'alta';
+
+/** Tu día: con esto se calcula la ruta (sueño primero). */
+export interface DayPrefs {
+  sleepHours: number;
+  sleepMin: number;
+  commute: number;
+  prep: number;
+  windDown: number;
+  morning: number;
+  wakeFree: string;
+}
+
+/** Un hábito hecho (con la sesión guiada o marcado a mano). */
+export interface Hecho {
+  id: string;
+  day: string;
+  areaId: string;
+  at: number;
+  minutes: number;
+  via: 'guiado' | 'manual';
+}
+
+/** Cómo amaneciste y cuándo te acostaste: con esto la ruta se vuelve realista. */
+export interface SleepLog {
+  beds: number[]; // "me voy a dormir"
+  wakes: Record<string, { at: number; energy: Energy }>; // por día
+}
+
 /** "Voy a grabar X": un toque antes de grabar; el siguiente video queda en esa área. */
 export interface Intent {
   areaId: string;
@@ -186,6 +220,7 @@ export interface Settings {
   filmGrouping: 'area' | 'dia';
   importWeeks: number;
   rhythmIntroSeen: boolean;
+  day?: DayPrefs;
   camera: {
     facing: 'user' | 'environment';
     mode: 'auto' | 'normal' | 'proceso' | 'reflexion';
