@@ -410,8 +410,8 @@ function Poster({ clips, areas }: { clips: ReturnType<typeof useStore.getState>[
         <motion.div
           key={c.id}
           initial={{ opacity: 0 }}
-          animate={{ opacity: 1, scale: [1, 1.06, 1] }}
-          transition={{ delay: i * 0.04, scale: { duration: 12 + (i % 5), repeat: Infinity } }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: i * 0.04 }}
           style={{ aspectRatio: '16/10', borderRadius: 10, overflow: 'hidden', borderBottom: `3px solid ${areas.find((a) => a.id === c.areaId)?.color ?? '#555'}` }}
         >
           <img src={c.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

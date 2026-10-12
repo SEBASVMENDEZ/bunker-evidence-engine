@@ -19,7 +19,7 @@ export type Seg = Base &
     | { t: 'resumen' }
     | { t: 'experimento'; text: string }
     | { t: 'capitulo'; title: string; subtitle: string; color: string; icon: string; areaId?: string; dayIndex?: number; days: boolean[]; count: number }
-    | { t: 'clip'; clipId: string; from: number; to: number; rate: number; factor: number; audio: boolean; badge: Badge; part: [number, number]; index: number; ofArea: number }
+    | { t: 'clip'; clipId: string; from: number; to: number; rate: number; factor: number; audio: boolean; badge: Badge; part: [number, number]; index: number; ofArea: number; flip?: boolean }
     | { t: 'comparacion' }
     | { t: 'metricas' }
     | { t: 'insight'; statements: Statement[] }
@@ -50,6 +50,7 @@ interface Piece {
   rate: number;
   audio: boolean;
   badge: Badge;
+  flip?: boolean; // se dibuja con los cuadros de la huella (fluido, no decodifica el video)
 }
 
 type SegInput = Seg extends infer S ? (S extends Seg ? Omit<S, 'start' | 'chapter'> : never) : never;
@@ -66,9 +67,12 @@ function planClip(c: Clip, scale: number): Piece[] {
   const pieces: Piece[] = [];
   const s = clamp(scale, 0.15, 1.6);
 
+  // con huella: todo el tramo en un solo time-lapse continuo, sin repetir escenas ni trabarse
+  const hasHuella = (c.huella?.n ?? 0) >= 4;
   const timelapse = (from: number, to: number, outTotal: number, maxPieces = 8): Piece[] => {
     const span = to - from;
     if (span <= 0.5) return [];
+    if (hasHuella) return [{ from, to, rate: Math.max(1, span / Math.max(1.5, outTotal)), audio: false, badge: 'acelerado', flip: true }];
     let k = clamp(Math.round(outTotal / 2.6), 1, maxPieces);
     let outPer = outTotal / k;
     // objetivo ≈ ×8 efectivo; si el archivo ya viene acelerado, no se vuelve a acelerar de más
@@ -119,18 +123,18 @@ function planClip(c: Clip, scale: number): Piece[] {
       let out = clamp(4 + 3.2 * Math.log2(1 + real / 60), 5, 24) * s;
       if (c.starred) out *= 1.5;
       out = Math.max(2.2, out);
-      if (dur <= out * 1.3) pieces.unshift({ from: 0, to: dur, rate: Math.max(1, dur / out), audio: false, badge: 'acelerado' });
+      if (dur <= out * 1.3) pieces.unshift({ from: 0, to: dur, rate: Math.max(1, dur / out), audio: false, badge: 'acelerado', flip: hasHuella });
       else pieces.unshift(...timelapse(0, dur, out));
       break;
     }
     case 'transicion': {
       const to = Math.min(dur, 3);
-      pieces.unshift({ from: 0, to, rate: 2, audio: false, badge: 'destello' });
+      pieces.unshift({ from: 0, to, rate: 2, audio: false, badge: 'destello', flip: hasHuella });
       break;
     }
     case 'repeticion': {
       const a = Math.min(dur * 0.3, Math.max(0, dur - 2.4));
-      pieces.unshift({ from: a, to: Math.min(dur, a + 2.4), rate: 1.25, audio: false, badge: 'montaje' });
+      pieces.unshift({ from: a, to: Math.min(dur, a + 2.4), rate: 1.25, audio: false, badge: 'montaje', flip: hasHuella });
       break;
     }
   }
@@ -266,7 +270,7 @@ export function buildFilm(inp: FilmInput): Film {
       ps.forEach((p, pi) => {
         push({
           t: 'clip', dur: (p.to - p.from) / p.rate, clipId: c.id, from: p.from + (c.span?.[0] ?? 0), to: p.to + (c.span?.[0] ?? 0), rate: p.rate, factor: lapseFactor(c),
-          audio: p.audio, badge: p.badge, part: [pi + 1, ps.length], index: idx + 1, ofArea: g.clips.length,
+          audio: p.audio, badge: p.badge, part: [pi + 1, ps.length], index: idx + 1, ofArea: g.clips.length, flip: !!p.flip,
         });
       });
     });

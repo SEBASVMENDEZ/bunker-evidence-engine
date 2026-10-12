@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactElement } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Clapperboard, Compass, House, LayoutGrid, Settings2, Video, Wind, Upload, Loader2 } from 'lucide-react';
 import { useStore, needsConfirm, type Route } from './store';
@@ -6,17 +6,18 @@ import { Logo, Toasts, pageMotion } from './components/ui';
 import { sound } from './lib/sound';
 import { fmtBytes, isoWeekday, weekKey } from './lib/time';
 import Hoy from './screens/Hoy';
-import Camara from './screens/Camara';
-import Evidencia from './screens/Evidencia';
-import Domingo from './screens/Domingo';
-import Brujula from './screens/Brujula';
-import Ajustes from './screens/Ajustes';
-import Onboarding from './screens/Onboarding';
-import FilmPlayer from './screens/FilmPlayer';
-import ClipModal from './screens/ClipModal';
-import Calma from './screens/Calma';
-import { TurnosModal } from './components/Turnos';
-import Sesion from './screens/Sesion';
+// carga por partes: al abrir la app solo se prepara Hoy (rápido en el celular); el resto llega al pedirlo
+const Camara = lazy(() => import('./screens/Camara'));
+const Evidencia = lazy(() => import('./screens/Evidencia'));
+const Domingo = lazy(() => import('./screens/Domingo'));
+const Brujula = lazy(() => import('./screens/Brujula'));
+const Ajustes = lazy(() => import('./screens/Ajustes'));
+const Onboarding = lazy(() => import('./screens/Onboarding'));
+const FilmPlayer = lazy(() => import('./screens/FilmPlayer'));
+const ClipModal = lazy(() => import('./screens/ClipModal'));
+const Calma = lazy(() => import('./screens/Calma'));
+const TurnosModal = lazy(() => import('./components/Turnos').then((m) => ({ default: m.TurnosModal })));
+const Sesion = lazy(() => import('./screens/Sesion'));
 import { MiDia } from './components/Ruta';
 
 const NAV: { id: Route; label: string; icon: typeof House }[] = [
@@ -237,14 +238,16 @@ export default function App() {
       {!ready ? (
         <Splash />
       ) : !onboarded ? (
-        <Onboarding />
+        <Suspense fallback={<Splash />}>
+          <Onboarding />
+        </Suspense>
       ) : (
         <div className="app">
           <Nav />
           <main className="main">
             <AnimatePresence mode="wait">
               <motion.div key={route} {...pageMotion}>
-                {screens[route]}
+                <Suspense fallback={<div className="page" />}>{screens[route]}</Suspense>
               </motion.div>
             </AnimatePresence>
           </main>
@@ -252,12 +255,14 @@ export default function App() {
           <DropZone />
         </div>
       )}
+      <Suspense fallback={null}>
       <AnimatePresence>{filmWeek && <FilmPlayer key="film" week={filmWeek} />}</AnimatePresence>
       <AnimatePresence>{clipModal && <ClipModal key="clip" id={clipModal} />}</AnimatePresence>
       <AnimatePresence>{calmOpen && <Calma key="calm" />}</AnimatePresence>
       <AnimatePresence>{turnosOpen && <TurnosModal key="turnos" />}</AnimatePresence>
       <AnimatePresence>{miDiaOpen && <MiDia key="midia" />}</AnimatePresence>
       <AnimatePresence>{sesion && <Sesion key="sesion" />}</AnimatePresence>
+      </Suspense>
       <Toasts />
     </>
   );

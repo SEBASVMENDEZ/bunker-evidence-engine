@@ -4,11 +4,11 @@ import type { Clip } from '../types';
 import { segAt, type Film, type Seg } from './edl';
 import {
   H, W, type Scene, drawCapitulo, drawClipOverlay, drawComparacion, drawDemo, drawExperimento, drawFinal,
-  drawInsight, drawIntro, drawLoading, drawMetricas, drawPregunta, drawProgress, drawResumen, drawStill, drawVideoFrame, grainOverlay,
+  drawInsight, drawIntro, drawLoading, drawMetricas, drawPregunta, drawProgress, drawResumen, drawStill, drawFlip, drawVideoFrame, grainOverlay,
 } from './draw';
 import { Ambient, sound } from '../sound';
 import { iconImage } from '../icons';
-import { getPosters } from '../db';
+import { getHuellaFrames, getHuellaVoice, getPosters } from '../db';
 
 /** Un video que no está a mano se muestra con sus cuadros de vista previa, sin alargar la película. */
 const STILL_MAX = 7;
@@ -57,6 +57,11 @@ export class FilmEngine {
   private hasFrame = false;
   private missing = new Set<string>(); // clips cuyo video no está disponible ahora
   private stills = new Map<string, HTMLImageElement[]>();
+  private flips = new Map<string, { t: number[]; imgs: ImageBitmap[] }>(); // cuadros de la huella por video
+  private flipLoading = new Map<string, Promise<void>>();
+  private voices = new Map<string, AudioBuffer | null>(); // voz guardada (reflexiones)
+  private voice: AudioBufferSourceNode | null = null;
+  private voiceGain: GainNode | null = null;
   musicOn: boolean;
 
   constructor(
@@ -99,7 +104,17 @@ export class FilmEngine {
     const ac = sound.ensure();
     this.bus = ac.createGain();
     this.bus.gain.value = 1;
-    this.bus.connect(sound.master);
+    // limitador: la voz del celular + la música ya no se saturan (eso era la distorsión)
+    const lim = ac.createDynamicsCompressor();
+    lim.threshold.value = -10;
+    lim.knee.value = 4;
+    lim.ratio.value = 14;
+    lim.attack.value = 0.002;
+    lim.release.value = 0.18;
+    this.bus.connect(lim).connect(sound.master);
+    this.voiceGain = ac.createGain();
+    this.voiceGain.gain.value = 0.9;
+    this.voiceGain.connect(this.bus);
     for (const s of this.slots) {
       try {
         const src = ac.createMediaElementSource(s.v);
@@ -110,8 +125,11 @@ export class FilmEngine {
         s.v.muted = true;
       }
     }
-    this.ambient = new Ambient(this.bus, 0.55);
+    this.ambient = new Ambient(this.bus, 0.4);
     await this.checkMissing();
+    // los primeros time-lapse listos antes de empezar (sin pantallazos negros)
+    const firstFlips = this.film.segs.filter((sg) => this.isFlip(sg)).slice(0, 2);
+    await Promise.all(firstFlips.map((sg) => sg.t === 'clip' && this.ensureFlip(this.scene.clips.get(sg.clipId)!)));
     this.resize(this.canvas.width || 1920, this.canvas.height || 1080);
     this.enter(0, false);
     this.last = performance.now();
@@ -137,12 +155,14 @@ export class FilmEngine {
     if (this.musicOn) this.ambient?.start();
     const seg = this.cur;
     if (seg.t === 'clip' && !this.isVirtual(seg)) this.slot.v.play().catch(() => {});
+    this.startVoice();
     if (this.local < 0.05) this.cue(seg);
     this.emit(true);
   }
 
   pause() {
     this.playing = false;
+    this.stopVoice();
     for (const s of this.slots) s.v.pause();
     this.ambient?.stop(0.5);
     this.emit(true);
@@ -193,6 +213,9 @@ export class FilmEngine {
   destroy() {
     this.destroyed = true;
     cancelAnimationFrame(this.raf);
+    this.stopVoice();
+    for (const fl of this.flips.values()) fl.imgs.forEach((b) => b.close());
+    this.flips.clear();
     for (const s of this.slots) {
       s.v.pause();
       s.v.removeAttribute('src');
@@ -226,9 +249,84 @@ export class FilmEngine {
     return seg.t === 'clip' && this.scene.clips.get(seg.clipId)?.source === 'demo';
   }
 
-  /** Fragmento que se dibuja sin reproductor de video (demostración o vista previa). */
+  /** Fragmento que se dibuja sin reproductor de video (demostración, huella o vista previa). */
   private isVirtual(seg: Seg) {
-    return seg.t === 'clip' && (this.isDemo(seg) || this.missing.has(seg.clipId));
+    return seg.t === 'clip' && (this.isDemo(seg) || this.missing.has(seg.clipId) || this.isFlip(seg));
+  }
+
+  private flipKey(c: Clip) {
+    return c.huella?.ref ?? c.id;
+  }
+
+  /** ¿Se dibuja con la huella? Los acelerados siempre (fluido); los que hablan, si el video no está. */
+  private isFlip(seg: Seg) {
+    if (seg.t !== 'clip') return false;
+    const c = this.scene.clips.get(seg.clipId);
+    if (!c || (c.huella?.n ?? 0) < 4) return false;
+    return !!seg.flip || (seg.audio && this.missing.has(seg.clipId));
+  }
+
+  private ensureFlip(c: Clip): Promise<void> {
+    const key = this.flipKey(c);
+    const hit = this.flips.get(key);
+    if (hit) {
+      this.flips.delete(key);
+      this.flips.set(key, hit); // el más reciente queda al final
+      return Promise.resolve();
+    }
+    let p = this.flipLoading.get(key);
+    if (!p) {
+      p = (async () => {
+        const h = c.huella!;
+        const blobs = await getHuellaFrames(key, h.n).catch(() => [] as Blob[]);
+        const bmps = await Promise.all(blobs.map((b) => createImageBitmap(b).catch(() => null)));
+        const t: number[] = [];
+        const imgs: ImageBitmap[] = [];
+        bmps.forEach((b, i) => b && (t.push(h.t[i]), imgs.push(b)));
+        if (this.destroyed) return imgs.forEach((b) => b.close());
+        this.flips.set(key, { t, imgs });
+        // memoria: solo los 4 videos más recientes quedan cargados
+        while (this.flips.size > 4) {
+          const old = this.flips.keys().next().value as string;
+          this.flips.get(old)?.imgs.forEach((b) => b.close());
+          this.flips.delete(old);
+        }
+        if (h.audio && !this.voices.has(key)) {
+          const vb = await getHuellaVoice(key).catch(() => undefined);
+          this.voices.set(key, vb ? await sound.ensure().decodeAudioData(await vb.arrayBuffer()).catch(() => null) : null);
+        }
+      })().finally(() => this.flipLoading.delete(key));
+      this.flipLoading.set(key, p);
+    }
+    return p;
+  }
+
+  /** La voz guardada de una reflexión, sincronizada con su fragmento. */
+  private startVoice() {
+    this.stopVoice();
+    const seg = this.cur;
+    if (!this.playing || seg.t !== 'clip' || !seg.audio || !this.isFlip(seg) || !this.voiceGain) return;
+    const c = this.scene.clips.get(seg.clipId);
+    const buf = c ? this.voices.get(this.flipKey(c)) : null;
+    if (!buf) return;
+    const off = seg.from + this.local;
+    if (off >= buf.duration - 0.05) return;
+    const src = sound.ensure().createBufferSource();
+    src.buffer = buf;
+    src.connect(this.voiceGain);
+    src.start(0, off, Math.max(0.05, Math.min(seg.to, buf.duration) - off));
+    this.voice = src;
+  }
+
+  private stopVoice() {
+    if (!this.voice) return;
+    try {
+      this.voice.stop();
+    } catch {
+      /* ya terminó */
+    }
+    this.voice.disconnect();
+    this.voice = null;
   }
 
   private async checkMissing() {
@@ -338,6 +436,7 @@ export class FilmEngine {
       this.transAt = performance.now();
     } else this.transAt = -1;
     const prevSlot = this.active;
+    this.stopVoice();
     this.idx = i;
     this.local = offset;
     this.stallFor = 0;
@@ -381,6 +480,18 @@ export class FilmEngine {
     } else {
       this.loading = false;
       for (const s of this.slots) s.v.pause();
+      if (seg.t === 'clip' && this.isFlip(seg)) {
+        const c = this.scene.clips.get(seg.clipId)!;
+        if (!this.flips.has(this.flipKey(c))) {
+          this.loading = true;
+          this.ensureFlip(c).then(() => {
+            if (this.idx !== i || this.destroyed) return;
+            this.loading = false;
+            this.setAudio(this.cur);
+            this.startVoice();
+          });
+        } else this.startVoice();
+      }
       this.setAudio(seg);
       this.preloadNext();
     }
@@ -389,6 +500,10 @@ export class FilmEngine {
   }
 
   private preloadNext() {
+    // el siguiente time-lapse se prepara mientras ves el actual
+    const nf = this.film.segs.findIndex((sg, k) => k > this.idx && this.isFlip(sg));
+    const nseg = nf >= 0 ? this.film.segs[nf] : null;
+    if (nseg && nseg.t === 'clip') this.ensureFlip(this.scene.clips.get(nseg.clipId)!).catch(() => {});
     const j = this.nextClipIndex(this.idx);
     if (j < 0) return;
     const other = this.cur.t === 'clip' && !this.isVirtual(this.cur) ? 1 - this.active : this.active;
@@ -399,14 +514,16 @@ export class FilmEngine {
 
   private setAudio(seg: Seg) {
     const speaking = seg.t === 'clip' && seg.audio && !this.isVirtual(seg);
+    const c = seg.t === 'clip' ? this.scene.clips.get(seg.clipId) : undefined;
+    const voiced = seg.t === 'clip' && seg.audio && this.isFlip(seg) && !!(c && this.voices.get(this.flipKey(c)));
     const ac = sound.ctx;
     this.slots.forEach((s, k) => {
       if (!s.gain || !ac) return;
       const on = speaking && k === this.active;
-      s.gain.gain.setTargetAtTime(on ? 1 : 0, ac.currentTime, 0.08);
+      s.gain.gain.setTargetAtTime(on ? 0.85 : 0, ac.currentTime, 0.08);
       s.v.muted = !s.gain && !on;
     });
-    this.ambient?.duck(speaking);
+    this.ambient?.duck(speaking || voiced);
   }
 
   private cue(seg: Seg) {
@@ -455,7 +572,7 @@ export class FilmEngine {
       this.lastSrc = v.currentTime;
     } else {
       this.local += dt * 1;
-      const end = seg.t === 'clip' && !this.isDemo(seg) ? Math.min(seg.dur, STILL_MAX) : seg.dur;
+      const end = seg.t === 'clip' && !this.isDemo(seg) && !this.isFlip(seg) ? Math.min(seg.dur, STILL_MAX) : seg.dur;
       if (this.local >= end) this.next();
     }
   }
@@ -523,6 +640,8 @@ export class FilmEngine {
     const src = seg.from + t * seg.rate;
     if (clip.source === 'demo') {
       drawDemo(ctx, clip, this.scene.areas.find((a) => a.id === clip.areaId), src);
+    } else if (this.isFlip(seg)) {
+      drawFlip(ctx, this.flips.get(this.flipKey(clip)), seg.from + (seg.to - seg.from) * Math.min(1, t / Math.max(0.01, seg.dur)), this.time);
     } else if (this.missing.has(clip.id)) {
       drawStill(ctx, this.stills.get(clip.id) ?? [], t, Math.min(seg.dur, STILL_MAX));
     } else {

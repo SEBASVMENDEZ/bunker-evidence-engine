@@ -1,9 +1,13 @@
 // Sesión guiada: un toque y Búnker te lleva de un hábito al siguiente con voz, campana y
 // cronómetro. No tienes que mirar el teléfono: te avisa cuándo cambiar. Al terminar, cada
-// hábito queda hecho en tu ruta (aunque no hayas grabado video).
+// hábito queda hecho en tu ruta.
+// Evidencia ligera (opcional): la cámara toma un cuadro cada pocos segundos (y tu voz en las
+// reflexiones) y lo guarda directo como huella: sin archivos de video, sin galería, sin Drive,
+// y cada hábito ya sabe qué área es.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { X, Pause, Play, Check, SkipForward, Plus, Volume2, VolumeX } from 'lucide-react';
+import { X, Pause, Play, Check, SkipForward, Plus, Volume2, VolumeX, Camera, CameraOff } from 'lucide-react';
+import { frameBlob } from '../lib/media';
 import { useStore } from '../store';
 import { AreaIcon } from '../components/ui';
 import { sound } from '../lib/sound';
@@ -37,6 +41,15 @@ export default function Sesion() {
   const [extra, setExtra] = useState<number[]>(() => sesion.steps.map(() => 0));
   const [done, setDone] = useState<{ areaId: string; minutes: number }[]>([]);
   const [now, setNow] = useState(Date.now());
+  // ---- evidencia ligera ----
+  const [cam, setCam] = useState<'off' | 'user' | 'environment'>(() => useStore.getState().settings.sessionCam ?? 'off');
+  const camRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const shots = useRef<{ t: number; blob: Blob }[]>([]);
+  const [shotCount, setShotCount] = useState(0);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<Blob[]>([]);
+  const isReflexion = (i: number) => areas.find((a) => a.id === sesion.steps[i]?.areaId)?.kind === 'reflexion';
   // tiempo transcurrido por paso, robusto si el teléfono pone la app en segundo plano
   const startRef = useRef(Date.now());
   const pausedAcc = useRef(0);
@@ -49,6 +62,33 @@ export default function Sesion() {
   const elapsed = (now - startRef.current - pausedAcc.current - (pausedAt.current ? now - pausedAt.current : 0)) / 1000;
   const left = total - elapsed;
   const invested = useMemo(() => done.reduce((s, d) => s + d.minutes, 0), [done]);
+
+  const stepSec = () => (Date.now() - startRef.current - pausedAcc.current - (pausedAt.current ? Date.now() - pausedAt.current : 0)) / 1000;
+
+  const startVoiceRec = (i: number) => {
+    const st = streamRef.current;
+    const track = st?.getAudioTracks()[0];
+    if (!track || !isReflexion(i) || typeof MediaRecorder === 'undefined') return;
+    try {
+      const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported(m)) ?? '';
+      const r = new MediaRecorder(new MediaStream([track]), { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 32000 });
+      chunks.current = [];
+      r.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
+      r.start(1000);
+      recRef.current = r;
+    } catch {
+      recRef.current = null;
+    }
+  };
+
+  const stopVoiceRec = (): Promise<Blob | undefined> =>
+    new Promise((res) => {
+      const r = recRef.current;
+      recRef.current = null;
+      if (!r || r.state === 'inactive') return res(undefined);
+      r.onstop = () => res(chunks.current.length ? new Blob(chunks.current, { type: r.mimeType || 'audio/webm' }) : undefined);
+      r.stop();
+    });
 
   const announce = (i: number) => {
     const st = sesion.steps[i];
@@ -66,13 +106,24 @@ export default function Sesion() {
       addHecho(step.areaId, mins, 'guiado');
       setDone((d) => [...d, { areaId: step.areaId, minutes: mins }]);
     }
+    const frames = shots.current;
+    shots.current = [];
+    setShotCount(0);
+    const startedAt = startRef.current;
+    const seconds = Math.max(1, Math.round(elapsed));
+    const areaId = step.areaId;
+    const voiceP = stopVoiceRec();
+    if (logIt && frames.length >= 2) voiceP.then((audio) => useStore.getState().saveLightClip({ areaId, startedAt, seconds, frames, audio }));
     const n = idx + 1;
     startRef.current = Date.now();
     pausedAcc.current = 0;
     pausedAt.current = null;
     setPaused(false);
     setIdx(n);
-    if (n < sesion.steps.length) announce(n);
+    if (n < sesion.steps.length) {
+      announce(n);
+      startVoiceRec(n);
+    }
     else {
       sound.play('seal', true);
       navigator.vibrate?.([200, 100, 200, 100, 300]);
@@ -97,6 +148,61 @@ export default function Sesion() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    useStore.getState().setSettings({ sessionCam: cam });
+    if (cam === 'off') {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const mic = sesion.steps.some((_, i) => isReflexion(i));
+        const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cam, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: mic });
+        if (!alive) return st.getTracks().forEach((t) => t.stop());
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = st;
+        if (camRef.current) {
+          camRef.current.srcObject = st;
+          camRef.current.play().catch(() => {});
+        }
+        if (!recRef.current) startVoiceRec(idx);
+      } catch {
+        useStore.getState().toast('No pude abrir la cámara: la sesión sigue sin evidencia.', 'info');
+        setCam('off');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cam]);
+
+  useEffect(() => {
+    if (cam === 'off' || finished || paused) return;
+    const every = (step.minutes <= 3 ? 2 : step.minutes <= 10 ? 4 : 6) * 1000;
+    const id = window.setInterval(async () => {
+      const v = camRef.current;
+      if (!v || v.readyState < 2 || shots.current.length >= 180) return;
+      const b = await frameBlob(v, 480);
+      if (b) {
+        shots.current.push({ t: Math.round(stepSec() * 10) / 10, blob: b });
+        setShotCount(shots.current.length);
+      }
+    }, every);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cam, idx, paused, finished]);
+
+  useEffect(
+    () => () => {
+      recRef.current?.state === 'recording' && recRef.current.stop();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    },
+    [],
+  );
 
   // se acabó el tiempo del hábito: campana y al siguiente
   useEffect(() => {
@@ -139,6 +245,13 @@ export default function Sesion() {
       exit={{ opacity: 0 }}
     >
       <div className="row" style={{ position: 'absolute', top: 18, right: 18, gap: 8 }}>
+        <button
+          className={`btn sm${cam !== 'off' ? ' primary' : ''}`}
+          onClick={() => setCam((c) => (c === 'off' ? 'user' : c === 'user' ? 'environment' : 'off'))}
+          title="Evidencia ligera: un cuadro cada pocos segundos, sin archivo de video"
+        >
+          {cam === 'off' ? <CameraOff size={16} /> : <Camera size={16} />} {cam === 'off' ? 'Sin evidencia' : cam === 'user' ? 'Frontal' : 'Trasera'}
+        </button>
         <button className="btn icon" onClick={() => setVoice((v) => !v)} aria-label={voice ? 'Silenciar voz' : 'Activar voz'}>
           {voice ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
@@ -147,6 +260,14 @@ export default function Sesion() {
         </button>
       </div>
 
+      {cam !== 'off' && (
+        <div style={{ position: 'absolute', left: 16, bottom: 16, width: 96, borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(255,255,255,.18)', background: '#000' }}>
+          <video ref={camRef} muted playsInline autoPlay style={{ width: '100%', aspectRatio: '3/4', objectFit: 'cover', display: 'block', transform: cam === 'user' ? 'scaleX(-1)' : undefined }} />
+          <div className="tiny" style={{ padding: '4px 6px', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 7, background: '#F43F5E' }} /> {shotCount}
+          </div>
+        </div>
+      )}
       <div className="col" style={{ alignItems: 'center', gap: 18, width: 'min(520px, 100%)', textAlign: 'center' }}>
         <div className="eyebrow">{sesion.title}</div>
         {/* progreso de la sesión */}

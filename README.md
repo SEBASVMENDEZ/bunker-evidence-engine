@@ -53,6 +53,18 @@ Una hora de estudio grabada a ×10 es un archivo de 6 minutos. Búnker detecta l
 
 Nada se etiqueta ni se renombra. Los originales **nunca** se copian, mueven ni borran (salvo que tú los quites).
 
+### La huella: tu evidencia en MB, no en GB
+
+Cada video que entra se resume en su **huella**: 16–72 cuadros repartidos a lo largo de todo el video (480 px) y, si hablas (reflexiones), tu voz en un WAV liviano. Medido con 4 videos reales: **1,4 GB → 4,5 MB**, procesados en 39 s.
+
+- **La película se arma con las huellas**: cada actividad es un time-lapse continuo con fundidos (sin decodificar 1080p a ×16 en vivo, que era lo que trababa y repetía escenas). Las reflexiones suenan con tu voz guardada. Un limitador evita que la voz y la música se saturen.
+- **Ya no dependes del original**: después de importar puedes borrar los videos de la galería (Evidencia te dice cuánto liberas). Sin Drive, sin carpetas.
+- **Evidencia ligera en la sesión guiada**: activa la cámara (frontal o trasera) y Búnker toma un cuadro cada pocos segundos (y tu voz en las reflexiones) y los guarda directo como huella, ya con su área. Ni archivos de video ni importar.
+
+### Rápida en el celular
+
+Sin efectos que se recalculen en cada cuadro (fondo quieto, tarjetas sólidas, sin desenfoques) y carga por partes: al abrir solo se prepara *Hoy*; la película, la cámara, el domingo y los ajustes llegan al pedirlos.
+
 ### Tu Ruta: el plan del día que se arma solo
 
 En *Hoy*, Búnker no te da una lista: te dice **qué toca ahora** y lo empiezas con un botón.

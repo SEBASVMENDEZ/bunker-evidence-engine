@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { X, Star, EyeOff, Eye, Trash2, Calendar, HardDrive, Info, KeyRound, Upload, Scissors, Merge } from 'lucide-react';
 import { useStore, tramosOf } from '../store';
 import { makeThumb, visualSig } from '../lib/media';
+import { HuellaPlayer } from '../components/HuellaPlayer';
 import { AreaIcon } from '../components/ui';
 import { clipFile } from '../lib/db';
 import { KIND_INFO } from '../lib/content';
@@ -89,6 +90,8 @@ export default function ClipModal({ id }: { id: string }) {
                 if (clip.span && !v.paused && v.currentTime >= clip.span[1]) v.pause();
               }}
             />
+          ) : (clip.huella?.n ?? 0) >= 4 ? (
+            <HuellaPlayer clip={clip} />
           ) : clip.thumb ? (
             <img src={clip.thumb} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', filter: 'brightness(.6)' }} />
           ) : null}
@@ -99,7 +102,7 @@ export default function ClipModal({ id }: { id: string }) {
               </button>
             </div>
           )}
-          {needsPerm && !clip.handleKey && !clip.blobKey && (
+          {needsPerm && !clip.handleKey && !clip.blobKey && (clip.huella?.n ?? 0) < 4 && (
             // importado desde la galería: el video no se copió; elegirlo de nuevo lo reconecta
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '16px 56px 16px 16px', textAlign: 'center' }}>
               <div className="col" style={{ gap: 8, alignItems: 'center', maxWidth: 340 }}>

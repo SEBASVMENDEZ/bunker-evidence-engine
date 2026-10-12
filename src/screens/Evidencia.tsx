@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, FolderSync, Upload, RefreshCw, HelpCircle, FolderOpen, Sparkles, Trash2 } from 'lucide-react';
 import { useStore, needsConfirm } from '../store';
 import { AreaIcon, ClipThumb, Empty, Section } from '../components/ui';
-import { DAY_NAMES, fmtDuration, hm, isoWeekday, shiftWeek, weekDays, weekKey, weekLabel, weekNumber } from '../lib/time';
+import { DAY_NAMES, fmtBytes, fmtDuration, hm, isoWeekday, shiftWeek, weekDays, weekKey, weekLabel, weekNumber } from '../lib/time';
 import { sound } from '../lib/sound';
 
 export default function Evidencia() {
@@ -55,6 +55,22 @@ export default function Evidencia() {
           )}
         </div>
       </div>
+
+      {/* tu evidencia ya vive en Búnker: los originales se pueden borrar de la galería */}
+      {(() => {
+        const saved = clips.filter((c) => !c.parentId && (c.huella?.n ?? 0) >= 4 && (c.source === 'importado' || c.source === 'carpeta'));
+        if (!saved.length) return null;
+        const gb = saved.reduce((n, c) => n + c.size, 0);
+        return (
+          <div className="card row wrap" style={{ marginBottom: 18, padding: 16, gap: 12, borderColor: 'rgba(52,211,153,.3)' }}>
+            <Sparkles size={20} color="#34D399" />
+            <div className="grow small">
+              <b>{saved.length} videos ya tienen su huella en Búnker</b> (cuadros + tu voz en las reflexiones). La película ya no los necesita:
+              puedes borrarlos de la galería cuando quieras y liberar <b>{fmtBytes(gb)}</b>.
+            </div>
+          </div>
+        );
+      })()}
 
       {/* carpetas vinculadas */}
       {folders.length > 0 && (

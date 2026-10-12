@@ -83,6 +83,8 @@ export interface Clip {
   lay?: number[]; // dónde está tu cuerpo en el cuadro (9×16), para reconocer la actividad
   mot?: number; // cuánto te mueves
   analyzed?: number; // versión del análisis de tramos ya aplicado
+  // huella de evidencia: cuadros (y voz) guardados en Búnker; la película no depende del original
+  huella?: { n: number; t: number[]; audio?: boolean; v: number; ref?: string };
   width: number;
   height: number;
   thumb?: string;
@@ -221,6 +223,7 @@ export interface Settings {
   importWeeks: number;
   rhythmIntroSeen: boolean;
   day?: DayPrefs;
+  sessionCam?: 'off' | 'user' | 'environment'; // evidencia ligera durante la sesión guiada
   camera: {
     facing: 'user' | 'environment';
     mode: 'auto' | 'normal' | 'proceso' | 'reflexion';

@@ -79,6 +79,7 @@ export async function deleteClip(c: Clip, deleteOwnMedia: boolean) {
   if (c.handleKey) await d.delete('handles', c.handleKey);
   if (deleteOwnMedia && c.blobKey) await d.delete('media', c.blobKey);
   for (let i = 0; i < 4; i++) await d.delete('media', posterKey(c.id, i));
+  if (c.huella && !c.huella.ref) await deleteHuella(c.id, c.huella.n);
   session.delete(c.id);
 }
 
@@ -105,6 +106,28 @@ export async function getPosters(clipId: string): Promise<Blob[]> {
     out.push(b);
   }
   return out;
+}
+
+// ---- Huella de evidencia: cuadros y voz de cada video (unos pocos MB por semana) ----
+const frameKey = (id: string, i: number) => `f_${id}_${i}`;
+const voiceKey = (id: string) => `a_${id}`;
+export async function putHuella(id: string, frames: Blob[], audio?: Blob) {
+  const d = await db();
+  const tx = d.transaction('media', 'readwrite');
+  await Promise.all([...frames.map((b, i) => tx.store.put(b, frameKey(id, i))), ...(audio ? [tx.store.put(audio, voiceKey(id))] : []), tx.done]);
+}
+export async function getHuellaFrames(id: string, n: number): Promise<Blob[]> {
+  const d = await db();
+  const out = await Promise.all(Array.from({ length: n }, (_, i) => d.get('media', frameKey(id, i))));
+  return out.filter((b): b is Blob => !!b);
+}
+export async function getHuellaVoice(id: string): Promise<Blob | undefined> {
+  return (await (await db()).get('media', voiceKey(id))) ?? undefined;
+}
+async function deleteHuella(id: string, n: number) {
+  const d = await db();
+  for (let i = 0; i < n; i++) await d.delete('media', frameKey(id, i));
+  await d.delete('media', voiceKey(id));
 }
 
 export async function putMedia(key: string, blob: Blob) {

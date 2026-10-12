@@ -5,12 +5,12 @@ import * as DB from './lib/db';
 import { DEFAULT_AREAS, DEFAULT_COMPASS, DEFAULT_SETTINGS } from './lib/content';
 import { inferKind, isAnchor, markRepetitions, reclassify, CONFIRM_THRESHOLD } from './lib/classify';
 import { analyzeTramos, TRAMOS_V, TRAMO_MIN_REAL, type Tramo } from './lib/tramos';
-import { extractDate, lapseFromInfo, makeThumb, mp4Info, probeVideo, VIDEO_EXT } from './lib/media';
+import { framesFor, HUELLA_V, makeHuella, voiceWav, wantsVoice, type Huella } from './lib/huella';
+import { extractDate, lapseFromInfo, makeThumb, mp4Info, probeVideo, VIDEO_EXT, visualSig } from './lib/media';
 import { sound } from './lib/sound';
 import { addDays, dayKey, parseHM, startOfDay, uid, weekKey, weekStart } from './lib/time';
 import { iconImage } from './lib/icons';
-import { drawDemo, W as FW } from './lib/film/draw';
-import { blocksToShifts, extractShifts, readWorkbook, type SheetResult } from './lib/sheet';
+import type { SheetResult } from './lib/sheet';
 
 export type Route = 'hoy' | 'camara' | 'evidencia' | 'domingo' | 'brujula' | 'ajustes';
 
@@ -103,6 +103,8 @@ interface State {
   setDayPrefs: (p: Partial<DayPrefs>) => void;
   postpone: (areaIds: string[], minutes: number) => void;
   openSesion: (s: State['sesion']) => void;
+  /** Evidencia ligera: cuadros (y voz) tomados durante la sesión guiada, sin archivo de video. */
+  saveLightClip: (p: { areaId: string; startedAt: number; seconds: number; frames: { t: number; blob: Blob }[]; audio?: Blob }) => Promise<void>;
   setMiDia: (v: boolean) => void;
 }
 
@@ -112,6 +114,9 @@ export const dayPrefsOf = (st: Settings): DayPrefs => ({ ...DEFAULT_DAY, ...st.d
 /** ¿Este video largo aún no se ha revisado por si trae varias actividades seguidas? */
 export const needsTramos = (c: Clip) =>
   !c.parentId && !c.span && c.source !== 'demo' && (c.analyzed ?? 0) < TRAMOS_V && (c.realDuration ?? c.duration * (c.speed || (c.lapse ? 5 : 1))) >= TRAMO_MIN_REAL;
+
+/** ¿Falta guardar la huella (cuadros + voz) de este video? */
+export const needsHuella = (c: Clip) => !c.parentId && c.source !== 'demo' && (c.huella?.v ?? 0) < HUELLA_V;
 
 /** Clips del mismo video, en orden (el primero es el original). */
 export const tramosOf = (clips: Clip[], c: Clip) => {
@@ -179,14 +184,13 @@ export const useStore = create<State>((set, get) => {
       return;
     }
     if (c.status === 'listo' && c.thumb) {
-      // ya procesado: solo falta revisar si es un bloque con varias actividades
+      // ya procesado: falta revisar si es un bloque o guardar su huella
       if (needsTramos(c)) await splitIntoTramos(c, file);
+      else if (needsHuella(c)) await saveHuella(c, file);
       return;
     }
     try {
-      // sin copia guardada: se guardan unos cuadros para que la película lo muestre aunque el video no esté a mano
-      const p = await probeVideo(file, c.duration || undefined, !DB.isPersistent(c));
-      if (p.posters?.length) await DB.putPosters(c.id, p.posters);
+      const p = await probeVideo(file, c.duration || undefined);
       // time-lapse: sin audio o con fps de captura en los metadatos (solo videos del celular, no grabaciones propias)
       const fromPhone = c.source === 'carpeta' || c.source === 'importado';
       const info = /\.(mp4|mov|m4v|3gp)$/i.test(c.name) ? await mp4Info(file) : null;
@@ -208,11 +212,44 @@ export const useStore = create<State>((set, get) => {
       };
       if (isAnchor(next) && next.kindBy === 'auto') next.kind = inferKind(next.duration, get().areas.find((a) => a.id === next.areaId), next.lapse);
       upsertClips([next]);
-      if (needsTramos(next)) await splitIntoTramos(next, file);
-      else reclass(new Set([dayKey(next.takenAt)]));
+      if (needsTramos(next)) await splitIntoTramos(next, file, info?.hasAudio ?? undefined);
+      else {
+        reclass(new Set([dayKey(next.takenAt)]));
+        if (needsHuella(next)) await saveHuella(next, file, info?.hasAudio ?? undefined);
+      }
     } catch (e) {
       upsertClips([{ ...c, status: 'error', error: (e as Error).message }]);
     }
+  };
+
+  /** Guarda la huella de un video (cuadros a lo largo de todo el video y, si hablas, la voz). */
+  const saveHuella = async (c: Clip, file: Blob, hasAudio?: boolean, pre?: { frames: Blob[]; t: number[] }) => {
+    let h: Huella | null = null;
+    try {
+      if (hasAudio === undefined && /\.(mp4|mov|m4v|3gp)$/i.test(c.name)) hasAudio = (await mp4Info(file))?.hasAudio ?? undefined;
+      const fileDur = c.span ? Math.max(c.duration, c.span[1]) : c.duration;
+      const voice = wantsVoice({ hasAudio, rotation: c.rotation, duration: fileDur, lapse: c.lapse });
+      if (pre?.frames.length) h = { ...pre, audio: voice ? await voiceWav(file).catch(() => undefined) : undefined };
+      else {
+        set({ analyzing: { id: c.id, p: 0 } });
+        h = await makeHuella(file, { duration: fileDur, n: framesFor(fileDur * (c.speed || (c.lapse ? 5 : 1))), voice, onProgress: (p) => set({ analyzing: { id: c.id, p } }) });
+      }
+    } catch {
+      h = null;
+    } finally {
+      set({ analyzing: null });
+    }
+    const cur = get().clips.find((x) => x.id === c.id);
+    if (!cur) return;
+    if (!h?.frames.length) {
+      upsertClips([{ ...cur, huella: { n: 0, t: [], v: HUELLA_V } }]); // se intentó: no reintentar en cada arranque
+      return;
+    }
+    await DB.putHuella(c.id, h.frames, h.audio);
+    const meta = { n: h.frames.length, t: h.t, audio: !!h.audio, v: HUELLA_V };
+    const kids = get().clips.filter((x) => x.parentId === c.id).map((k) => ({ ...k, huella: { ...meta, ref: c.id } }));
+    upsertClips([{ ...cur, huella: meta }, ...kids]);
+    get().refreshStorage();
   };
 
   /** Un clip nuevo que sale de un tramo de otro video (comparte su archivo). */
@@ -256,16 +293,20 @@ export const useStore = create<State>((set, get) => {
   };
 
   /** Video largo: si trae varias actividades seguidas (bloque de la mañana), se divide en tramos. */
-  const splitIntoTramos = async (c: Clip, file: Blob) => {
+  const splitIntoTramos = async (c: Clip, file: Blob, hasAudio?: boolean) => {
     set({ analyzing: { id: c.id, p: 0 } });
     let trs: Tramo[] = [];
+    let pre: { frames: Blob[]; t: number[] } | undefined;
     try {
-      trs = await analyzeTramos(file, {
+      const r = await analyzeTramos(file, {
         duration: c.duration,
         speed: c.speed || 1,
-        posters: !DB.isPersistent(c),
+        posters: false,
+        huellaFrames: needsHuella(c) ? framesFor(c.duration * (c.speed || (c.lapse ? 5 : 1))) : 0,
         onProgress: (p) => set({ analyzing: { id: c.id, p } }),
       });
+      trs = r.tramos;
+      pre = r.huella;
     } catch {
       /* ilegible: se queda como un solo video */
     } finally {
@@ -276,6 +317,7 @@ export const useStore = create<State>((set, get) => {
     if (trs.length < 2) {
       upsertClips([{ ...cur, analyzed: TRAMOS_V, lay: trs[0]?.lay ?? cur.lay, mot: trs[0]?.mot ?? cur.mot }]);
       reclass(new Set([dayKey(cur.takenAt)]));
+      if (needsHuella(cur)) await saveHuella(get().clips.find((x) => x.id === c.id)!, file, hasAudio, pre);
       return;
     }
     const first = trs[0];
@@ -298,6 +340,7 @@ export const useStore = create<State>((set, get) => {
     upsertClips([root, ...kids]);
     reclass(new Set([root, ...kids].map((x) => dayKey(x.takenAt))));
     get().toast(`Bloque detectado: ${trs.length} actividades en ${cur.name}`, 'ok');
+    if (needsHuella(root)) await saveHuella(root, file, hasAudio, pre);
   };
 
   const runQueue = async () => {
@@ -507,7 +550,7 @@ export const useStore = create<State>((set, get) => {
       }
       enqueue(clips.filter((c) => c.status === 'pendiente').map((c) => c.id));
       // videos largos ya guardados o enlazados que aún no se revisaron por tramos
-      enqueue(clips.filter((c) => c.status === 'listo' && needsTramos(c) && DB.isPersistent(c)).map((c) => c.id));
+      enqueue(clips.filter((c) => c.status === 'listo' && (needsTramos(c) || needsHuella(c)) && DB.isPersistent(c)).map((c) => c.id));
       try {
         if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist();
       } catch {
@@ -647,7 +690,7 @@ export const useStore = create<State>((set, get) => {
               else {
                 DB.attachSession(known.id, it);
                 relinked++;
-                if (known.status !== 'listo' || needsTramos(known)) again.push(known.id);
+                if (known.status !== 'listo' || needsTramos(known) || needsHuella(known)) again.push(known.id);
               }
               continue;
             }
@@ -790,6 +833,7 @@ export const useStore = create<State>((set, get) => {
       const person = settings.scheduleName || settings.userName;
       let res: SheetResult;
       try {
+        const { extractShifts, readWorkbook } = await import('./lib/sheet');
         res = extractShifts(await readWorkbook(file), person, file.name);
       } catch {
         get().toast('Ese archivo no parece una hoja de cálculo (.ods o .xlsx).', 'error');
@@ -811,6 +855,7 @@ export const useStore = create<State>((set, get) => {
         return res;
       }
       // las semanas sin fecha no se adivinan: podrían pisar turnos reales
+      const { blocksToShifts } = await import('./lib/sheet');
       const fromSheet = blocksToShifts(res.blocks);
       const shifts = { ...get().shifts };
       const touched = new Set<string>();
@@ -852,6 +897,7 @@ export const useStore = create<State>((set, get) => {
     // ---------------- demo ----------------
     loadDemo: async () => {
       const areas = get().areas.filter((a) => a.active).sort((a, b) => a.order - b.order);
+      const { drawDemo, W: FW } = await import('./lib/film/draw');
       await Promise.all(areas.map((a) => iconImage(a.icon, '#ffffff', 256)));
       const now = new Date();
       const thisWeek = weekKey(now);
@@ -1066,6 +1112,64 @@ export const useStore = create<State>((set, get) => {
     },
 
     openSesion: (sesion) => set({ sesion }),
+
+    saveLightClip: async ({ areaId, startedAt, seconds, frames, audio }) => {
+      if (frames.length < 2) return;
+      const area = get().areas.find((a) => a.id === areaId);
+      // miniatura y firma del lugar desde el cuadro del medio
+      let thumb: string | undefined;
+      let sig: number[] | undefined;
+      let width = 0;
+      let height = 0;
+      try {
+        const bmp = await createImageBitmap(frames[Math.floor(frames.length / 2)].blob);
+        const cv = document.createElement('canvas');
+        cv.width = bmp.width;
+        cv.height = bmp.height;
+        cv.getContext('2d')!.drawImage(bmp, 0, 0);
+        width = bmp.width;
+        height = bmp.height;
+        thumb = makeThumb(cv);
+        sig = visualSig(cv);
+        bmp.close();
+      } catch {
+        /* sin miniatura */
+      }
+      const id = uid('c_');
+      await DB.putHuella(id, frames.map((x) => x.blob), audio);
+      const clip: Clip = {
+        id,
+        source: 'camara',
+        fingerprint: `ligero|${startedAt}|${areaId}`,
+        name: `Búnker · ${area?.name ?? 'Sesión'}`,
+        mime: 'image/jpeg',
+        size: frames.reduce((n, x) => n + x.blob.size, 0) + (audio?.size ?? 0),
+        takenAt: startedAt,
+        dateBy: 'grabacion',
+        duration: seconds,
+        width,
+        height,
+        thumb,
+        sig,
+        rotation: null,
+        areaId,
+        confidence: 1,
+        areaBy: 'camara',
+        kind: area?.kind === 'reflexion' ? 'reflexion' : 'proceso',
+        kindBy: 'auto',
+        starred: false,
+        markers: [],
+        excluded: false,
+        week: weekKey(startedAt),
+        addedAt: Date.now(),
+        status: 'listo',
+        analyzed: TRAMOS_V,
+        huella: { n: frames.length, t: frames.map((x) => x.t), audio: !!audio, v: HUELLA_V },
+      };
+      upsertClips([clip]);
+      reclass(new Set([dayKey(startedAt)]));
+      get().refreshStorage();
+    },
     setMiDia: (miDiaOpen) => set({ miDiaOpen }),
 
     refreshStorage: async () => {

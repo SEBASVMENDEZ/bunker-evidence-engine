@@ -520,9 +520,9 @@ export function drawDemo(ctx: CanvasRenderingContext2D, clip: Clip, area: Area |
 let blurCanvas: HTMLCanvasElement | null = null;
 
 /** Dibuja un fotograma: horizontal → a pantalla completa; vertical → centrado con fondo difuminado. */
-export function drawVideoFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElement | HTMLImageElement, t: number, zoom = 1) {
-  const vw = v instanceof HTMLVideoElement ? v.videoWidth : v.naturalWidth;
-  const vh = v instanceof HTMLVideoElement ? v.videoHeight : v.naturalHeight;
+export function drawVideoFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElement | HTMLImageElement | ImageBitmap, t: number, zoom = 1) {
+  const vw = v instanceof HTMLVideoElement ? v.videoWidth : v instanceof HTMLImageElement ? v.naturalWidth : v.width;
+  const vh = v instanceof HTMLVideoElement ? v.videoHeight : v instanceof HTMLImageElement ? v.naturalHeight : v.height;
   if (!vw || !vh) return;
   const r = vw / vh;
   if (r >= 1.45) {
@@ -568,6 +568,25 @@ export function drawVideoFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElemen
   const zh = dh * zoom;
   ctx.drawImage(v, x - (zw - dw) / 2, y - (zh - dh) / 2, zw, zh);
   ctx.restore();
+}
+
+/** Time-lapse desde la huella: el cuadro del momento y un fundido suave hacia el siguiente. */
+export function drawFlip(ctx: CanvasRenderingContext2D, f: { t: number[]; imgs: ImageBitmap[] } | undefined, src: number, t: number) {
+  ctx.fillStyle = '#05070D';
+  ctx.fillRect(0, 0, W, H);
+  if (!f || !f.imgs.length) return;
+  let i = 0;
+  while (i + 1 < f.t.length && f.t[i + 1] <= src) i++;
+  const a = f.t[i];
+  const b = f.t[i + 1];
+  const k = b !== undefined && b > a ? clamp01((src - a) / (b - a)) : 0;
+  drawVideoFrame(ctx, f.imgs[i], t);
+  if (k > 0.02 && f.imgs[i + 1]) {
+    ctx.save();
+    ctx.globalAlpha = k;
+    drawVideoFrame(ctx, f.imgs[i + 1], t);
+    ctx.restore();
+  }
 }
 
 /** Vista previa de un clip cuyo video no está a mano: sus cuadros con un acercamiento lento y fundidos. */

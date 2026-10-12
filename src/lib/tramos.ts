@@ -182,7 +182,15 @@ function keepActivityChanges(D: Desc[], cuts: number[], w2: number, h2: number):
  * Analiza un video largo y devuelve sus tramos (uno solo si no hay cambio de actividad).
  * `speed` = factor de time-lapse conocido (1 si es a velocidad normal).
  */
-export async function analyzeTramos(blob: Blob, opts: { duration: number; speed: number; posters: boolean; onProgress?: (p: number) => void }): Promise<Tramo[]> {
+export interface TramosResult {
+  tramos: Tramo[];
+  huella?: { frames: Blob[]; t: number[] }; // cuadros de la huella, tomados en la misma pasada
+}
+
+export async function analyzeTramos(
+  blob: Blob,
+  opts: { duration: number; speed: number; posters: boolean; huellaFrames?: number; onProgress?: (p: number) => void },
+): Promise<TramosResult> {
   const url = URL.createObjectURL(blob);
   const v = document.createElement('video');
   v.muted = true;
@@ -199,11 +207,16 @@ export async function analyzeTramos(blob: Blob, opts: { duration: number; speed:
     c.width = W;
     c.height = H;
     const ctx = c.getContext('2d', { willReadFrequently: true });
-    if (!ctx || !duration) return [];
+    if (!ctx || !duration) return { tramos: [] };
     const dt = Math.max(2, duration / PARAMS.maxSamples);
     const times: number[] = [];
     for (let t = dt / 2; t < duration - 0.2; t += dt) times.push(t);
     const Z: Float32Array[] = [];
+    // cuadros de la huella repartidos entre las mismas muestras (sin volver a recorrer el video)
+    const nH = Math.min(opts.huellaFrames ?? 0, times.length);
+    const want = new Set(Array.from({ length: nH }, (_, k) => Math.min(times.length - 1, Math.round(((k + 0.5) * times.length) / nH - 0.5))));
+    const hFrames: Blob[] = [];
+    const hT: number[] = [];
     for (let i = 0; i < times.length; i++) {
       v.currentTime = times[i];
       await waitFor(v, 'seeked', 15000);
@@ -222,9 +235,14 @@ export async function analyzeTramos(blob: Blob, opts: { duration: number; speed:
       // normalizado: los cambios de exposición de la cámara no cuentan como cambio de actividad
       for (let p = 0; p < W * H; p++) z[p] = (z[p] - mean) / sd;
       Z.push(z);
+      if (want.has(i)) {
+        const fb = await frameBlob(v, 480);
+        if (fb) (hFrames.push(fb), hT.push(Math.round(times[i] * 100) / 100));
+      }
       opts.onProgress?.((i + 1) / times.length);
     }
-    if (Z.length < 6) return [];
+    const huella = hFrames.length ? { frames: hFrames, t: hT } : undefined;
+    if (Z.length < 6) return { tramos: [], huella };
     const D = describe(Z, W, H);
     const w2 = W >> 1;
     const h2 = H >> 1;
@@ -254,7 +272,7 @@ export async function analyzeTramos(blob: Blob, opts: { duration: number; speed:
       }
       out.push(tr);
     }
-    return out;
+    return { tramos: out, huella };
   } finally {
     v.removeAttribute('src');
     v.load();

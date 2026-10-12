@@ -181,7 +181,6 @@ export function ClipThumb({ clip, area, onClick, showDate = false }: { clip: Cli
   const analyzing = useStore((s) => (s.analyzing?.id === clip.id ? s.analyzing.p : null));
   return (
     <motion.div
-      layout
       className="thumb"
       style={{ ['--c' as string]: area?.color ?? '#56617f' }}
       onClick={onClick}

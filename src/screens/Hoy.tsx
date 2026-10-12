@@ -316,8 +316,8 @@ function SundayPoster({ week }: { week: string }) {
             alt=""
             style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', borderRadius: 12 }}
             initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1, y: [0, i % 2 ? -10 : 10, 0] }}
-            transition={{ delay: i * 0.05, y: { duration: 9 + (i % 4), repeat: Infinity, ease: 'easeInOut' } }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.05 }}
           />
         ))}
       </div>
