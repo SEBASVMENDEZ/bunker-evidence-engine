@@ -53,6 +53,14 @@ Una hora de estudio grabada a ×10 es un archivo de 6 minutos. Búnker detecta l
 
 Nada se etiqueta ni se renombra. Los originales **nunca** se copian, mueven ni borran (salvo que tú los quites).
 
+### Del cumplir al aprender (retroalimentación de mi maestro)
+
+- **Una línea de aprendizaje** al terminar cada sesión guiada, con la pregunta que le sirve a esa área (lectura: “¿qué idea entendiste y cómo la aplicarías?”; trading: “¿qué decisión tomaste y por qué?”, y el domingo “¿qué pasó después?”; ejercicio: “¿qué hiciste mejor que la vez pasada?”). Opcional, se puede dictar. Y un toque para lo que lo hizo difícil (cansancio, poco tiempo, interrupción…).
+- **El domingo en tres miradas**: lo que hiciste (días y minutos por área, con sesiones guiadas aunque no haya video, y cuánto de la ruta cumpliste), lo que aprendiste (tus líneas y las dificultades que se repitieron) y lo que estás construyendo (tus áreas agrupadas por lo que buscan en tu vida, tu dirección y los vehículos que estás probando).
+- **Patrones de 4 semanas**, cada uno con su tamaño de muestra: cuánto de la ruta haces, qué mantienes en días de cansancio y qué cae primero, según el turno, cuánto tardas en retomar un hábito, las dificultades que se repiten y tu hora real de dormir. Son observaciones para investigar, no conclusiones.
+- **Memoria de experimentos** (Brújula): situación y posible explicación → prueba → lo que observaste → conclusión provisional (continuar, modificar, investigar otra explicación). Lo comprobado, separado de lo supuesto.
+- **Respaldo completo** en un solo archivo (rutina, turnos, ruta, aprendizajes, revisiones, experimentos y huellas): en el celular se comparte a Drive; se restaura en un toque. Domingo avisa si llevas una semana sin copia.
+
 ### La huella: tu evidencia en MB, no en GB
 
 Cada video que entra se resume en su **huella**: 16–72 cuadros repartidos a lo largo de todo el video (480 px) y, si hablas (reflexiones), tu voz en un WAV liviano. Medido con 4 videos reales: **1,4 GB → 4,5 MB**, procesados en 39 s.

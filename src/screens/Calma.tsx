@@ -45,7 +45,7 @@ export default function Calma() {
   }, []);
 
   return (
-    <motion.div className="overlay" style={{ zIndex: 110, background: 'radial-gradient(circle at 50% 40%, rgba(45,212,191,.12), rgba(2,4,9,.92) 60%)' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+    <motion.div className="overlay" style={{ zIndex: 110, background: 'radial-gradient(circle at 50% 40%, rgba(45,212,191,.12), transparent 60%), #04060b' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <button className="btn icon" style={{ position: 'absolute', top: 20, right: 20 }} onClick={close} aria-label="Cerrar">
         <X size={18} />
       </button>

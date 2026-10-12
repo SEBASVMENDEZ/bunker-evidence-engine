@@ -8,6 +8,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, Pause, Play, Check, SkipForward, Plus, Volume2, VolumeX, Camera, CameraOff } from 'lucide-react';
 import { frameBlob } from '../lib/media';
+import { DIFICULTADES, LEARN_ORDER, promptOf } from '../lib/aprendizaje';
+import { dayKey } from '../lib/time';
 import { useStore } from '../store';
 import { AreaIcon } from '../components/ui';
 import { sound } from '../lib/sound';
@@ -239,7 +241,7 @@ export default function Sesion() {
   return (
     <motion.div
       className="overlay"
-      style={{ zIndex: 120, background: `radial-gradient(circle at 50% 38%, ${col}26, rgba(2,4,9,.96) 62%)`, padding: 20 }}
+      style={{ zIndex: 120, background: `radial-gradient(circle at 50% 38%, ${col}26, transparent 62%), #04060b`, padding: 20 }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -328,6 +330,7 @@ export default function Sesion() {
               <p className="muted">
                 {invested} min invertidos en ti · {done.length} {done.length === 1 ? 'hábito' : 'hábitos'}. Eso cuenta, aunque el día esté pesado.
               </p>
+              <Aprender areaIds={done.map((d) => d.areaId)} />
               <button className="btn primary lg" onClick={close}>
                 Volver a mi ruta
               </button>
@@ -336,5 +339,44 @@ export default function Sesion() {
         </AnimatePresence>
       </div>
     </motion.div>
+  );
+}
+
+/** Una línea de aprendizaje (opcional) y lo que lo hizo difícil: de cumplir a aprender. */
+function Aprender({ areaIds }: { areaIds: string[] }) {
+  const areas = useStore((st) => st.areas);
+  const dificultades = useStore((st) => st.dificultades);
+  const [text, setText] = useState('');
+  const [saved, setSaved] = useState(false);
+  const id = LEARN_ORDER.find((x) => areaIds.includes(x)) ?? areaIds[areaIds.length - 1];
+  const area = areas.find((a) => a.id === id);
+  if (!area) return null;
+  const p = promptOf(area);
+  const today = dayKey(Date.now());
+  const on = (tag: string) => dificultades.some((d) => d.tag === tag && d.areaId === area.id && d.day === today);
+  return (
+    <div className="col" style={{ gap: 8, width: '100%', textAlign: 'left', padding: 14, borderRadius: 18, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)' }}>
+      <b className="small">{area.name}: {p.q}</b>
+      {saved ? (
+        <span className="small" style={{ color: 'var(--ok)' }}>✓ Guardado. El domingo lo verás en «Lo que aprendiste».</span>
+      ) : (
+        <>
+          <textarea className="textarea" rows={2} value={text} placeholder={p.hint + ' (opcional; puedes dictarlo)'} onChange={(e) => setText(e.target.value)} />
+          {text.trim() && (
+            <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => { useStore.getState().addAprendizaje(area.id, text, p.kind); setSaved(true); }}>
+              Guardar
+            </button>
+          )}
+        </>
+      )}
+      <span className="tiny muted">¿Algo lo hizo difícil?</span>
+      <div className="row wrap" style={{ gap: 6 }}>
+        {DIFICULTADES.map((t) => (
+          <button key={t} className={`chip${on(t) ? ' on' : ''}`} style={{ ['--c' as string]: '#F5B94A', fontSize: 12 }} onClick={() => useStore.getState().toggleDificultad(t, area.id)}>
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

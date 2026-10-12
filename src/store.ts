@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Area, CalmLog, Clip, Compass, DailyLog, DayPrefs, Energy, Hecho, Intent, LearnSample, LinkedFolder, Settings, SheetLink, Shift, Shifts, SleepLog, WeekReview } from './lib/types';
 import { DEFAULT_DAY } from './lib/ruta';
+import type { Aprendizaje, Dificultad, PlanSnapshot } from './lib/aprendizaje';
 import * as DB from './lib/db';
 import { DEFAULT_AREAS, DEFAULT_COMPASS, DEFAULT_SETTINGS } from './lib/content';
 import { inferKind, isAnchor, markRepetitions, reclassify, CONFIRM_THRESHOLD } from './lib/classify';
@@ -56,6 +57,10 @@ interface State {
   postponed: Record<string, number>; // "más tarde" de hoy: área → no antes de
   sesion: { title: string; steps: { areaId: string; minutes: number }[] } | null;
   miDiaOpen: boolean;
+  // ---- aprender (no solo cumplir) ----
+  aprendizajes: Aprendizaje[];
+  dificultades: Dificultad[];
+  planes: Record<string, PlanSnapshot>; // la ruta propuesta cada día (para saber si te sirve)
 
   init: () => Promise<void>;
   go: (r: Route) => void;
@@ -106,6 +111,11 @@ interface State {
   /** Evidencia ligera: cuadros (y voz) tomados durante la sesión guiada, sin archivo de video. */
   saveLightClip: (p: { areaId: string; startedAt: number; seconds: number; frames: { t: number; blob: Blob }[]; audio?: Blob }) => Promise<void>;
   setMiDia: (v: boolean) => void;
+  addAprendizaje: (areaId: string, text: string, kind: Aprendizaje['kind']) => void;
+  setOutcome: (id: string, outcome: string) => void;
+  removeAprendizaje: (id: string) => void;
+  toggleDificultad: (tag: string, areaId?: string) => void;
+  savePlan: (p: PlanSnapshot) => void;
 }
 
 /** Tus preferencias del día (con los valores por defecto donde no hayas elegido). */
@@ -453,9 +463,12 @@ export const useStore = create<State>((set, get) => {
     postponed: {},
     sesion: null,
     miDiaOpen: false,
+    aprendizajes: [],
+    dificultades: [],
+    planes: {},
 
     init: async () => {
-      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents, hechos, sleep] = await Promise.all([
+      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents, hechos, sleep, aprendizajes, dificultades, planes] = await Promise.all([
         DB.kvGet<Settings>('settings'),
         DB.kvGet<Area[]>('areas'),
         DB.kvGet<Compass>('compass'),
@@ -470,6 +483,9 @@ export const useStore = create<State>((set, get) => {
         DB.kvGet<Intent[]>('intents'),
         DB.kvGet<Hecho[]>('hechos'),
         DB.kvGet<SleepLog>('sueno'),
+        DB.kvGet<Aprendizaje[]>('aprendizajes'),
+        DB.kvGet<Dificultad[]>('dificultades'),
+        DB.kvGet<Record<string, PlanSnapshot>>('planes'),
       ]);
       const st: Settings = { ...DEFAULT_SETTINGS, ...settings, camera: { ...DEFAULT_SETTINGS.camera, ...settings?.camera } };
       const def = new Map(DEFAULT_AREAS.map((a) => [a.id, a]));
@@ -517,6 +533,9 @@ export const useStore = create<State>((set, get) => {
         intents: intents ?? [],
         hechos: hechos ?? [],
         sleep: sleep ?? { beds: [], wakes: {} },
+        aprendizajes: aprendizajes ?? [],
+        dificultades: dificultades ?? [],
+        planes: planes ?? {},
         ready: true,
       });
       if (migrate) reclass('all');
@@ -1171,6 +1190,42 @@ export const useStore = create<State>((set, get) => {
       get().refreshStorage();
     },
     setMiDia: (miDiaOpen) => set({ miDiaOpen }),
+
+    addAprendizaje: (areaId, text, kind) => {
+      const t = text.trim();
+      if (!t) return;
+      const aprendizajes = [...get().aprendizajes, { id: uid('ap_'), day: dayKey(Date.now()), areaId, at: Date.now(), kind, text: t }].slice(-3000);
+      set({ aprendizajes });
+      DB.kvSet('aprendizajes', aprendizajes);
+      sound.play('saved');
+    },
+
+    setOutcome: (id, outcome) => {
+      const aprendizajes = get().aprendizajes.map((a) => (a.id === id ? { ...a, outcome: outcome.trim() || undefined } : a));
+      set({ aprendizajes });
+      DB.kvSet('aprendizajes', aprendizajes);
+    },
+
+    removeAprendizaje: (id) => {
+      const aprendizajes = get().aprendizajes.filter((a) => a.id !== id);
+      set({ aprendizajes });
+      DB.kvSet('aprendizajes', aprendizajes);
+    },
+
+    toggleDificultad: (tag, areaId) => {
+      const day = dayKey(Date.now());
+      const cur = get().dificultades;
+      const has = cur.some((d) => d.day === day && d.tag === tag && d.areaId === areaId);
+      const dificultades = has ? cur.filter((d) => !(d.day === day && d.tag === tag && d.areaId === areaId)) : [...cur, { day, tag, areaId, at: Date.now() }].slice(-2000);
+      set({ dificultades });
+      DB.kvSet('dificultades', dificultades);
+    },
+
+    savePlan: (p) => {
+      const keep = Object.fromEntries(Object.entries({ ...get().planes, [p.day]: p }).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 120));
+      set({ planes: keep });
+      DB.kvSet('planes', keep);
+    },
 
     refreshStorage: async () => {
       try {

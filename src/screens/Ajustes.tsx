@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronDown, ChevronUp, Plus, Trash2, Volume2, FolderOpen, Download, Upload, Sparkles, ShieldCheck, Smartphone, X } from 'lucide-react';
+import { guardarRespaldo } from '../components/Semana';
 import { useStore } from '../store';
 import { AreaIcon, Glyph, Section, Switch } from '../components/ui';
 import { AREA_COLORS, KIND_INFO, LIFE_AREAS, MOMENTS } from '../lib/content';
@@ -11,7 +12,6 @@ import { DAY_SHORT, fmtBytes, uid } from '../lib/time';
 import { sound, type Sfx } from '../lib/sound';
 import type { Area, ClipKind, LifeArea } from '../lib/types';
 import { weekKey } from '../lib/time';
-import * as DB from '../lib/db';
 
 export default function Ajustes() {
   const settings = useStore((s) => s.settings);
@@ -25,41 +25,19 @@ export default function Ajustes() {
   const hasDemo = useStore((s) => s.clips.some((c) => c.source === 'demo'));
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [withRec, setWithRec] = useState(false);
+  const [busyBackup, setBusyBackup] = useState(false);
+  const lastBackup = useStore((st) => st.settings.lastBackup);
   const exportBackup = async () => {
-    const s = useStore.getState();
-    const data = {
-      app: 'bunker-evidence-engine',
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      settings: s.settings,
-      areas: s.areas,
-      compass: s.compass,
-      samples: s.samples,
-      calm: s.calm,
-      reviews: Object.values(s.reviews),
-      daily: Object.values(s.daily),
-      clips: s.clips.filter((c) => c.source !== 'demo'),
-    };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `bunker-respaldo-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    setBusyBackup(true);
+    await guardarRespaldo(withRec);
+    setBusyBackup(false);
   };
 
   const importBackup = async (f: File) => {
     try {
-      const data = JSON.parse(await f.text());
-      if (data.app !== 'bunker-evidence-engine') throw new Error('formato');
-      await DB.kvSet('settings', data.settings);
-      await DB.kvSet('areas', data.areas);
-      await DB.kvSet('compass', data.compass);
-      await DB.kvSet('samples', data.samples ?? []);
-      await DB.kvSet('calm', data.calm ?? []);
-      for (const r of data.reviews ?? []) await DB.putReview(r);
-      for (const d of data.daily ?? []) await DB.putDaily(d);
-      await DB.putClips(data.clips ?? []);
+      const { restoreBackup } = await import('../lib/respaldo');
+      await restoreBackup(f);
       location.reload();
     } catch {
       useStore.getState().toast('Ese archivo no es un respaldo válido de Búnker.', 'error');
@@ -188,8 +166,8 @@ export default function Ajustes() {
                 </div>
               </div>
               <div className="row wrap" style={{ gap: 8 }}>
-                <button className="btn sm" onClick={exportBackup}><Download size={14} /> Exportar respaldo</button>
-                <input ref={fileRef} type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && importBackup(e.target.files[0])} />
+                <button className="btn sm primary" onClick={exportBackup} disabled={busyBackup}><Download size={14} /> {busyBackup ? 'Preparando…' : 'Guardar copia completa'}</button>
+                <input ref={fileRef} type="file" accept=".zip,application/zip,application/json" hidden onChange={(e) => e.target.files?.[0] && importBackup(e.target.files[0])} />
                 <button className="btn sm" onClick={() => fileRef.current?.click()}><Upload size={14} /> Restaurar respaldo</button>
                 {hasDemo ? (
                   <button className="btn sm danger" onClick={() => clearDemo()}><Trash2 size={14} /> Borrar demo</button>
@@ -197,7 +175,13 @@ export default function Ajustes() {
                   <button className="btn sm" onClick={() => loadDemo()}><Sparkles size={14} /> Cargar demo</button>
                 )}
               </div>
-              <p className="tiny faint">El respaldo guarda configuración, revisiones y el índice de evidencias (no los videos). Todo vive solo en este dispositivo.</p>
+              <label className="row tiny muted" style={{ gap: 8 }}>
+                <input type="checkbox" checked={withRec} onChange={(e) => setWithRec(e.target.checked)} /> Incluir los videos grabados dentro de la app (pesan mucho)
+              </label>
+              <p className="tiny faint">
+                La copia guarda TODO en un archivo: rutina, turnos, ruta, aprendizajes, revisiones, experimentos y las huellas (cuadros + tu voz). Guárdala en Drive; si cambias de teléfono, la restauras y sigues donde ibas.
+                {lastBackup ? ` Última copia: ${new Date(lastBackup).toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}.` : ' Aún no tienes ninguna copia.'}
+              </p>
             </div>
           </Section>
 

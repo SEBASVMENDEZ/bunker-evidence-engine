@@ -6,6 +6,7 @@ import { AreaIcon, Counter, Section, Sparkline, Glyph, Empty } from '../componen
 import { computeWeek, history, insights, shiftStats, trend } from '../lib/insights';
 import { shiftType, type ShiftType } from '../lib/classify';
 import { TurnosWeek } from '../components/Turnos';
+import { BackupNudge, Patrones, TresMiradas } from '../components/Semana';
 import { buildFilm } from '../lib/film/edl';
 import { TAG } from '../lib/film/draw';
 import { DECISIONS, WEEKLY_QUESTIONS } from '../lib/content';
@@ -27,6 +28,11 @@ export default function Domingo() {
   const saveReview = useStore((s) => s.saveReview);
   const go = useStore((s) => s.go);
   const [sealing, setSealing] = useState(false);
+  const hechos = useStore((s) => s.hechos);
+  const aprendizajes = useStore((s) => s.aprendizajes);
+  // la semana cuenta aunque no haya video: sesiones guiadas y aprendizajes también son evidencia
+  const weekDayKeys = useMemo(() => weekDays(week).map((d) => dayKey(d)), [week]);
+  const weekActive = hechos.some((h) => weekDayKeys.includes(h.day)) || aprendizajes.some((a) => weekDayKeys.includes(a.day));
 
   const current = weekKey(Date.now());
   const review = reviews[week];
@@ -107,13 +113,14 @@ export default function Domingo() {
         ))}
       </div>
 
-      {stats.total === 0 ? (
+      {stats.total === 0 && !weekActive ? (
         <div className="card">
           <Empty icon={<Film />} title="Esta semana no tiene evidencia" text="Cuando grabes o sincronices tus videos, aquí aparecerá la película y las métricas." action={<button className="btn primary" onClick={() => go('evidencia')}>Ir a Evidencia</button>} />
         </div>
       ) : (
         <div className="grid" style={{ gap: 18 }}>
           {/* PELÍCULA */}
+          {stats.total > 0 && (
           <motion.section className="card" style={{ padding: 0, overflow: 'hidden' }} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)' }} className="film-hero">
               <button onClick={() => { sound.play('tap'); openFilm(week); }} style={{ position: 'relative', minHeight: 340, overflow: 'hidden', textAlign: 'left' }}>
@@ -168,8 +175,15 @@ export default function Domingo() {
               </div>
             </div>
           </motion.section>
+          )}
 
-          {/* KPIs */}
+          {/* LAS TRES MIRADAS (retroalimentación de tu maestro) */}
+          <TresMiradas week={week} />
+          <Patrones />
+
+          {/* KPIs, matriz y tendencia: solo cuando hay video esta semana */}
+          {stats.total > 0 && (
+            <>
           <div className="grid g-4">
             <Kpi label="Evidencias" value={stats.total} delta={prev?.total ? stats.total - prev.total : null} />
             <Kpi label="Sesiones" value={sessions} delta={prev?.total ? sessions - prevSessions : null} />
@@ -229,6 +243,9 @@ export default function Domingo() {
             </Section>
           </div>
 
+            </>
+          )}
+
           {/* INSIGHT */}
           <Section eyebrow="Insight Engine" title="Hechos primero. Inferencias, con cuidado." right={<Sparkles size={18} color="var(--warn)" />}>
             <div className="col" style={{ gap: 10 }}>
@@ -260,6 +277,25 @@ export default function Domingo() {
                   {(['si', 'parcial', 'no'] as const).map((r) => (
                     <button key={r} className={`chip${review?.experimentResult === r ? ' on' : ''}`} style={{ ['--c' as string]: r === 'si' ? '#34D399' : r === 'parcial' ? '#F5B94A' : '#FB7185' }} onClick={() => { sound.play('tap'); saveReview(week, { experimentResult: r }); }}>
                       {r === 'si' ? 'Sí' : r === 'parcial' ? 'Parcialmente' : 'No'}
+                    </button>
+                  ))}
+                </div>
+                {prevReview.experimentWhy && <p className="tiny muted" style={{ marginTop: 10 }}>Situación y posible explicación: {prevReview.experimentWhy}</p>}
+                <div className="field" style={{ marginTop: 10 }}>
+                  <label>¿Qué observaste de verdad?</label>
+                  <textarea key={`o${week}`} className="textarea" rows={2} defaultValue={review?.experimentObs ?? ''} placeholder="Lo que pasó, no lo que esperabas" onBlur={(e) => saveReview(week, { experimentObs: e.target.value })} />
+                </div>
+                <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+                  <span className="small muted">Conclusión provisional:</span>
+                  {(
+                    [
+                      ['continuar', 'Continuar'],
+                      ['modificar', 'Modificar la prueba'],
+                      ['otra', 'Investigar otra explicación'],
+                    ] as const
+                  ).map(([k, label]) => (
+                    <button key={k} className={`chip${review?.experimentNext === k ? ' on' : ''}`} onClick={() => { sound.play('tap'); saveReview(week, { experimentNext: k }); }}>
+                      {label}
                     </button>
                   ))}
                 </div>
@@ -328,6 +364,10 @@ export default function Domingo() {
                 <input key={`e${week}`} className="input" defaultValue={review?.experiment ?? ''} placeholder="Ej.: dejar la ropa de entrenar lista la noche anterior" onBlur={(e) => saveReview(week, { experiment: e.target.value })} />
               </div>
             </div>
+            <div className="field" style={{ marginTop: 14 }}>
+              <label>Situación y posible explicación (lo que el experimento pone a prueba)</label>
+              <input key={`w${week}`} className="input" defaultValue={review?.experimentWhy ?? ''} placeholder="Ej.: después del turno de tarde no me levanto temprano; quizá duermo menos de 6 h" onBlur={(e) => saveReview(week, { experimentWhy: e.target.value })} />
+            </div>
             <p className="tiny faint" style={{ marginTop: 10 }}>
               No cambies de vehículo ante el primer fracaso, ni lo mantengas solo por orgullo. El criterio es la evidencia acumulada y la alineación con tu dirección.
             </p>
@@ -341,6 +381,7 @@ export default function Domingo() {
             </div>
           </section>
 
+          <BackupNudge />
           <History />
         </div>
       )}

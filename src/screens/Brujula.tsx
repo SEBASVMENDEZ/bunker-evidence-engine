@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Wind, Trash2, Car } from 'lucide-react';
+import { MemoriaExperimentos } from '../components/Semana';
 import { useStore } from '../store';
 import { Section } from '../components/ui';
 import { CYCLE, LIFE_AREAS, PRINCIPLES } from '../lib/content';
@@ -96,6 +97,9 @@ export default function Brujula() {
             ))}
           </ol>
         </Section>
+      </div>
+      <div style={{ marginTop: 18 }}>
+        <MemoriaExperimentos />
       </div>
     </div>
   );

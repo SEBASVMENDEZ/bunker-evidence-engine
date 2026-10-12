@@ -79,6 +79,14 @@ export function RutaHoy() {
   const clips = useStore((s) => s.clips);
   const { openSesion, postpone, addHecho, removeHecho, logWake, logBed, setTurnos, setMiDia, go, setIntent } = useStore.getState();
   const intents = useStore((s) => s.intents);
+  const planes = useStore((s) => s.planes);
+  // la ruta que te propuso hoy queda guardada: así se puede medir si de verdad te sirve
+  useEffect(() => {
+    const snap = planes[today];
+    if (!route.steps.length || route.mode === 'cierre' || (snap && snap.energy === wake?.energy)) return;
+    useStore.getState().savePlan({ day: today, at: now, energy: wake?.energy, mode: route.mode, steps: route.steps.map((s) => ({ areaId: s.areaId, level: s.level, minutes: s.minutes })) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today, wake?.energy, route.steps.length]);
   const areaOf = (id: string) => areas.find((a) => a.id === id);
   const pending = route.steps.filter((s) => !s.done);
   const first = pending[0];

@@ -115,6 +115,10 @@ export interface WeekReview {
   priority?: string;
   experiment?: string;
   experimentResult?: 'si' | 'parcial' | 'no';
+  // memoria de experimentos: situación → posible explicación → prueba → observación → conclusión provisional
+  experimentWhy?: string; // qué situación quieres mejorar y qué crees que la causa
+  experimentObs?: string; // (en la semana siguiente) qué observaste de verdad
+  experimentNext?: 'continuar' | 'modificar' | 'otra'; // conclusión provisional
   energy?: number;
   sealedAt?: number;
   watchedAt?: number;
@@ -223,7 +227,8 @@ export interface Settings {
   importWeeks: number;
   rhythmIntroSeen: boolean;
   day?: DayPrefs;
-  sessionCam?: 'off' | 'user' | 'environment'; // evidencia ligera durante la sesión guiada
+  sessionCam?: 'off' | 'user' | 'environment';
+  lastBackup?: number; // último respaldo completo // evidencia ligera durante la sesión guiada
   camera: {
     facing: 'user' | 'environment';
     mode: 'auto' | 'normal' | 'proceso' | 'reflexion';
