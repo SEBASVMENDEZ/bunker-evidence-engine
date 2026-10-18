@@ -157,7 +157,8 @@ export function RutaHoy() {
         {/* AHORA: el siguiente paso, ya decidido */}
         {first ? (
           <div className="col" style={{ gap: 12, padding: 16, borderRadius: 22, background: `linear-gradient(135deg, ${areaOf(first.areaId)?.color ?? '#6D8BFF'}22, rgba(255,255,255,.02))`, border: `1px solid ${areaOf(first.areaId)?.color ?? '#6D8BFF'}55` }}>
-            <div className="row" style={{ gap: 14 }}>
+            {/* si el texto no cabe junto a los íconos (el bloque en el celular), baja debajo de ellos */}
+            <div className="row wrap" style={{ gap: '12px 14px' }}>
               <div className="row">
                 {group.slice(0, 4).map((s, i) => (
                   <div key={s.areaId} style={{ marginLeft: i ? -14 : 0 }}>
@@ -165,9 +166,10 @@ export function RutaHoy() {
                   </div>
                 ))}
               </div>
-              <div className="grow">
-                <div className="eyebrow">{isNow ? 'Ahora' : `A las ${t(first.start)} · en ${Math.max(1, Math.round((first.start - now) / 60000))} min`}</div>
-                <h3 style={{ fontSize: 22, marginTop: 2 }}>{group.map((s) => areaOf(s.areaId)?.name).join(' · ')}</h3>
+              <div className="grow" style={{ flexBasis: 180 }}>
+                {/* espacios que no se parten: si no cabe, se corta solo después del "·" (y el "·" del título va pegado al nombre anterior) */}
+                <div className="eyebrow">{isNow ? 'Ahora' : `A\u00a0las\u00a0${t(first.start)} · en\u00a0${Math.max(1, Math.round((first.start - now) / 60000))}\u00a0min`}</div>
+                <h3 style={{ fontSize: 22, marginTop: 2, overflowWrap: 'break-word' }}>{group.map((s) => areaOf(s.areaId)?.name).join('\u00a0· ')}</h3>
                 <div className="tiny muted">
                   {groupMin} min · {group.length > 1 ? 'seguidos, sin pensar' : LEVEL[first.level].label}
                 </div>
