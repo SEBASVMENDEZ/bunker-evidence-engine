@@ -159,6 +159,7 @@ export function TresMiradas({ week }: { week: string }) {
                 <span key={v.id} className="small">
                   <b>{v.name}</b>
                   {v.hypothesis ? <span className="muted"> — {v.hypothesis}</span> : null}
+                  {v.reviewOn ? <span className="tiny muted"> · revisar el {new Date(v.reviewOn + 'T12:00').toLocaleDateString('es', { day: 'numeric', month: 'short' })}</span> : null}
                 </span>
               ))}
             </div>

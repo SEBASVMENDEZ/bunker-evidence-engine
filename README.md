@@ -157,6 +157,7 @@ La película se ajusta a la duración objetivo (Ajustes o Domingo). Los momentos
 ## Además
 
 - **Brújula:** el ciclo Dirección → Vehículo → Experimento → Evidencia → Revisión → Cambio → Nuevo experimento, tu dirección y el porqué, vehículos como hipótesis con fecha de revisión, rueda “persona completa, no perfecta” y los 13 principios.
+- **Vehículos de ingreso listos para probar** (Brújula): *Entrenar IA desde casa*, *Fotos y catálogos para tiendas* y *Mostrador*, cada uno con su hipótesis, la evidencia que decide, su fecha de revisión (28 de marzo) y su regla de corte (“si a fin de marzo no hay ingresos, se cierra”). Apagados hasta que tocas **Activar**; activos, aparecen en la revisión del domingo. Las plantillas viven en `src/lib/vehiculos.ts`.
 - **Modo calma:** el protocolo de frustración (Parar → Observar → Regular con respiración guiada → Revisar la evidencia real → Decidir → Continuar).
 - **Tablero diario mínimo:** las 5 preguntas en 60 segundos, opcional.
 - **Grabación segura:** cada segundo se guarda un fragmento; si se cierra la app o se apaga el equipo, la grabación se recupera al reabrir.
@@ -196,7 +197,7 @@ React + TypeScript + Vite. Sin servidor: todo corre en el navegador. Cada cambio
 
 ## Plan de integración
 
-Búnker es el centro del día; lo nuevo entra como puentes pequeños. Ver [`PLAN-INTEGRACION.md`](PLAN-INTEGRACION.md): I-0 rutina de temporada (en Ajustes, sin código) · **I-1 puente a Atlas ✅** · **I-2 ruta de estudio ✅** · **I-3 “Dinero hoy” ✅** · **I-4 domingo con dinero y estudio ✅** · I-5 vehículos de ingreso.
+Búnker es el centro del día; lo nuevo entra como puentes pequeños. Ver [`PLAN-INTEGRACION.md`](PLAN-INTEGRACION.md): I-0 rutina de temporada (en Ajustes, sin código) · **I-1 puente a Atlas ✅** · **I-2 ruta de estudio ✅** · **I-3 “Dinero hoy” ✅** · **I-4 domingo con dinero y estudio ✅** · **I-5 vehículos de ingreso ✅**.
 
 ## Siguientes pasos posibles
 

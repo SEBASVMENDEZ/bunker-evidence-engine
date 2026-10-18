@@ -9,6 +9,7 @@ import { computeWeek } from '../lib/insights';
 import { isoWeekday, uid, weekKey } from '../lib/time';
 import { sound } from '../lib/sound';
 import type { Vehicle } from '../lib/types';
+import { PLANTILLAS, type Plantilla } from '../lib/vehiculos';
 
 const STATUS: { id: Vehicle['status']; name: string; c: string }[] = [
   { id: 'probando', name: 'Probando', c: '#6D8BFF' },
@@ -218,6 +219,12 @@ function Vehicles() {
     setDraft({ name: '', hypothesis: '', evidenceNeeded: '', reviewOn: '' });
   };
   const upd = (id: string, p: Partial<Vehicle>) => setCompass({ vehicles: compass.vehicles.map((v) => (v.id === id ? { ...v, ...p } : v)) });
+  // plantillas listas: apagadas hasta que las actives (un toque); una vez activa no se vuelve a ofrecer
+  const plantillas = PLANTILLAS.filter((p) => !compass.vehicles.some((v) => v.plantilla === p.key));
+  const activar = ({ key, ...p }: Plantilla) => {
+    sound.play('pop');
+    setCompass({ vehicles: [...compass.vehicles, { id: uid('v_'), ...p, plantilla: key, status: 'probando', createdAt: Date.now() }] });
+  };
   return (
     <Section eyebrow="Vehículos" title="Hipótesis que estás probando" right={<Car size={18} className="muted" />}>
       <div className="col" style={{ gap: 10 }}>
@@ -245,10 +252,30 @@ function Vehicles() {
               </div>
               {v.hypothesis && <p className="small" style={{ marginTop: 6 }}><span className="muted">Hipótesis:</span> {v.hypothesis}</p>}
               {v.evidenceNeeded && <p className="small"><span className="muted">Evidencia necesaria:</span> {v.evidenceNeeded}</p>}
+              {v.corte && <p className="small"><span className="muted">Regla de corte:</span> {v.corte}</p>}
               {v.reviewOn && <p className="tiny" style={{ color: s.c, marginTop: 4 }}>Revisar el {new Date(v.reviewOn + 'T12:00').toLocaleDateString('es', { day: 'numeric', month: 'long' })}</p>}
             </motion.div>
           );
         })}
+        {plantillas.length > 0 && (
+          <div className="col" style={{ gap: 6 }}>
+            <div className="label">Vehículos de ingreso listos para probar</div>
+            {plantillas.map((p) => (
+              <div key={p.key} className="row" style={{ gap: 10, padding: '10px 12px', borderRadius: 14, border: '1px dashed var(--stroke-2)' }}>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <b className="small">{p.name}</b>
+                  <p className="tiny muted" style={{ margin: '2px 0 0' }}>{p.hypothesis}</p>
+                  <p className="tiny faint" style={{ margin: '2px 0 0' }}>
+                    Revisar el {new Date(p.reviewOn + 'T12:00').toLocaleDateString('es', { day: 'numeric', month: 'long' })} · {p.corte}
+                  </p>
+                </div>
+                <button className="btn sm" onClick={() => activar(p)}>
+                  <Plus size={14} /> Activar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="grid g-2" style={{ gap: 8 }}>
           <input className="input" placeholder="Vehículo (ej.: trading intradía)" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           <input className="input" type="date" value={draft.reviewOn} onChange={(e) => setDraft({ ...draft, reviewOn: e.target.value })} title="Fecha de revisión" />
