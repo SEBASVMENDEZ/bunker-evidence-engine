@@ -6,17 +6,10 @@ import type { Vehicle } from './types';
 export type Plantilla = Pick<Vehicle, 'name' | 'hypothesis' | 'evidenceNeeded' | 'reviewOn' | 'corte'> & { key: string };
 
 const CORTE = 'Si a fin de marzo no hay ingresos, se cierra.';
-const REVISION = '2027-03-28'; // el domingo de la decisión del plan de estudio
+const REVISION = '2027-03-28'; // el último domingo de marzo
+// ("Entrenar IA desde casa" se descartó el 18 oct 2026: generaba fricción; el foco es inglés y trading.)
 
 export const PLANTILLAS: Plantilla[] = [
-  {
-    key: 'entrenar-ia',
-    name: 'Entrenar IA desde casa',
-    hypothesis: 'Si aplico a plataformas de entrenamiento de IA y les dedico horas fijas en mis días libres, puedo ganar un ingreso extra desde casa sin dejar mi trabajo.',
-    evidenceNeeded: 'Aplicar a 2 plataformas antes del 1 de febrero; ser aceptado en una y recibir el primer pago.',
-    reviewOn: REVISION,
-    corte: CORTE,
-  },
   {
     key: 'fotos-catalogos',
     name: 'Fotos y catálogos para tiendas',

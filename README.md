@@ -75,11 +75,11 @@ Bajo el paso *Estudio* de tu ruta, Búnker te dice qué pide esta semana tu plan
 
 | Fase | Fechas | Cada semana |
 |---|---|---|
-| 1 | 19 oct 2026 – 3 ene 2027 | Inglés 6 × 20 min |
-| 2 | 4 ene – 28 mar 2027 | Inglés 6 × 30 min + Trabajo virtual 3 × 45 min |
-| 3 | 29 mar – 27 jun 2027 | Inglés 5 × 30 min + Trabajo virtual 2 × 45 min · Riesgo y disciplina 1 × 45 min (bajo *Trading*) · lectura opcional |
+| 1 | 19 oct 2026 – 3 ene 2027 | Inglés 6 × 20 min · Lecciones de SIFO 2 × 20 min (bajo *Trading*) |
+| 2 | 4 ene – 28 mar 2027 | Inglés 6 × 30 min · Lecciones de SIFO 3 × 25 min |
+| 3 | 29 mar – 27 jun 2027 | Inglés 5 × 30 min · Práctica en demo 3 × 30 min |
 
-Cuenta cada sesión guiada o “Ya lo hice” de esa área; un día sin eso pero con video del área cuenta como una sesión. Dos semanas antes de cada hito (1 feb: aplicar a 2 plataformas de entrenamiento de IA · 28 mar: decisión · 27 jun: evaluación) lo recuerda bajo *Estudio*. Las fases viven en `src/lib/plan-estudio.ts`.
+Cuenta cada sesión guiada o “Ya lo hice” de esa área; un día sin eso pero con video del área cuenta como una sesión. Dos semanas antes de cada hito (1 feb: termina el programa principal de SIFO · 15 mar: termina el bono · 27 jun: evaluación) lo recuerda bajo *Estudio*. Las fases viven en `src/lib/plan-estudio.ts`; qué lección toca cada semana está en la página Ruta de Estudio. El trading es estudio y cuenta demo: nada de plata real.
 
 ### Dinero hoy
 
@@ -157,7 +157,7 @@ La película se ajusta a la duración objetivo (Ajustes o Domingo). Los momentos
 ## Además
 
 - **Brújula:** el ciclo Dirección → Vehículo → Experimento → Evidencia → Revisión → Cambio → Nuevo experimento, tu dirección y el porqué, vehículos como hipótesis con fecha de revisión, rueda “persona completa, no perfecta” y los 13 principios.
-- **Vehículos de ingreso listos para probar** (Brújula): *Entrenar IA desde casa*, *Fotos y catálogos para tiendas* y *Mostrador*, cada uno con su hipótesis, la evidencia que decide, su fecha de revisión (28 de marzo) y su regla de corte (“si a fin de marzo no hay ingresos, se cierra”). Apagados hasta que tocas **Activar**; activos, aparecen en la revisión del domingo. Las plantillas viven en `src/lib/vehiculos.ts`.
+- **Vehículos de ingreso listos para probar** (Brújula): *Fotos y catálogos para tiendas* y *Mostrador*, cada uno con su hipótesis, la evidencia que decide, su fecha de revisión (28 de marzo) y su regla de corte (“si a fin de marzo no hay ingresos, se cierra”). Apagados hasta que tocas **Activar**; activos, aparecen en la revisión del domingo. Las plantillas viven en `src/lib/vehiculos.ts`.
 - **Modo calma:** el protocolo de frustración (Parar → Observar → Regular con respiración guiada → Revisar la evidencia real → Decidir → Continuar).
 - **Tablero diario mínimo:** las 5 preguntas en 60 segundos, opcional.
 - **Grabación segura:** cada segundo se guarda un fragmento; si se cierra la app o se apaga el equipo, la grabación se recupera al reabrir.

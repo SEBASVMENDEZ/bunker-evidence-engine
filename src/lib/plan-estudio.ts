@@ -19,15 +19,25 @@ export interface Fase {
   metas: Meta[];
 }
 
+// Plan del 18 oct 2026: solo inglés (iF12) y trading (lecciones de SIFO, luego práctica en demo).
+// El trading es estudio: nada de plata real. Las lecciones semana a semana viven en la Ruta de Estudio.
 export const FASES: Fase[] = [
-  { n: 1, desde: '2026-10-19', hasta: '2027-01-03', metas: [{ name: 'Inglés', areaId: 'estudio', veces: 6, minutos: 20 }] },
+  {
+    n: 1,
+    desde: '2026-10-19',
+    hasta: '2027-01-03',
+    metas: [
+      { name: 'Inglés', areaId: 'estudio', veces: 6, minutos: 20 },
+      { name: 'Lecciones de SIFO', areaId: 'trading', veces: 2, minutos: 20 },
+    ],
+  },
   {
     n: 2,
     desde: '2027-01-04',
     hasta: '2027-03-28',
     metas: [
       { name: 'Inglés', areaId: 'estudio', veces: 6, minutos: 30 },
-      { name: 'Trabajo virtual', areaId: 'estudio', veces: 3, minutos: 45 },
+      { name: 'Lecciones de SIFO', areaId: 'trading', veces: 3, minutos: 25 },
     ],
   },
   {
@@ -36,17 +46,15 @@ export const FASES: Fase[] = [
     hasta: '2027-06-27',
     metas: [
       { name: 'Inglés', areaId: 'estudio', veces: 5, minutos: 30 },
-      { name: 'Trabajo virtual', areaId: 'estudio', veces: 2, minutos: 45 },
-      { name: 'Riesgo y disciplina', areaId: 'trading', veces: 1, minutos: 45 },
-      { name: 'Lectura', areaId: 'lectura', veces: 0, minutos: 0, opcional: true },
+      { name: 'Práctica en demo', areaId: 'trading', veces: 3, minutos: 30 },
     ],
   },
 ];
 
 export const HITOS: { day: string; text: string }[] = [
-  { day: '2027-02-01', text: 'Aplicar a 2 plataformas de entrenamiento de IA' },
-  { day: '2027-03-28', text: 'Decisión' },
-  { day: '2027-06-27', text: 'Evaluación' },
+  { day: '2027-02-01', text: 'Terminas el programa principal de SIFO (84 lecciones)' },
+  { day: '2027-03-15', text: 'Terminas el bono de SIFO: desde abril, práctica en demo' },
+  { day: '2027-06-27', text: 'Evaluación: inglés y 12 semanas de journal en demo' },
 ];
 
 /** La fase del día (YYYY-MM-DD), o null fuera del plan. */
