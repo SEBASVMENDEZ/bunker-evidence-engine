@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Area, CalmLog, Clip, Compass, DailyLog, DayPrefs, Energy, Hecho, Intent, LearnSample, LinkedFolder, Settings, SheetLink, Shift, Shifts, SleepLog, WeekReview } from './lib/types';
 import { DEFAULT_DAY } from './lib/ruta';
 import type { Aprendizaje, Dificultad, PlanSnapshot } from './lib/aprendizaje';
+import type { AtlasAbierto, Repaso } from './lib/atlas';
 import * as DB from './lib/db';
 import { DEFAULT_AREAS, DEFAULT_COMPASS, DEFAULT_SETTINGS } from './lib/content';
 import { inferKind, isAnchor, markRepetitions, reclassify, CONFIRM_THRESHOLD } from './lib/classify';
@@ -61,6 +62,9 @@ interface State {
   aprendizajes: Aprendizaje[];
   dificultades: Dificultad[];
   planes: Record<string, PlanSnapshot>; // la ruta propuesta cada día (para saber si te sirve)
+  // ---- puente a Atlas ----
+  repasos: Record<string, Repaso>; // día → "¿repasaste tus conceptos?"
+  atlasAbierto: AtlasAbierto | null; // abriste Atlas y la pregunta te espera al volver
 
   init: () => Promise<void>;
   go: (r: Route) => void;
@@ -116,6 +120,10 @@ interface State {
   removeAprendizaje: (id: string) => void;
   toggleDificultad: (tag: string, areaId?: string) => void;
   savePlan: (p: PlanSnapshot) => void;
+  /** Marca que abriste Atlas desde un paso (Estudio o Lectura): al volver te pregunta. */
+  abrirAtlas: (areaId: string) => void;
+  /** "¿Repasaste tus conceptos?" Sí / Hoy no: queda como un hecho más del día. */
+  responderRepaso: (si: boolean) => void;
 }
 
 /** Tus preferencias del día (con los valores por defecto donde no hayas elegido). */
@@ -466,9 +474,11 @@ export const useStore = create<State>((set, get) => {
     aprendizajes: [],
     dificultades: [],
     planes: {},
+    repasos: {},
+    atlasAbierto: null,
 
     init: async () => {
-      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents, hechos, sleep, aprendizajes, dificultades, planes] = await Promise.all([
+      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents, hechos, sleep, aprendizajes, dificultades, planes, repasos, atlasAbierto] = await Promise.all([
         DB.kvGet<Settings>('settings'),
         DB.kvGet<Area[]>('areas'),
         DB.kvGet<Compass>('compass'),
@@ -486,6 +496,8 @@ export const useStore = create<State>((set, get) => {
         DB.kvGet<Aprendizaje[]>('aprendizajes'),
         DB.kvGet<Dificultad[]>('dificultades'),
         DB.kvGet<Record<string, PlanSnapshot>>('planes'),
+        DB.kvGet<Record<string, Repaso>>('repasos'),
+        DB.kvGet<AtlasAbierto>('atlasAbierto'),
       ]);
       const st: Settings = { ...DEFAULT_SETTINGS, ...settings, camera: { ...DEFAULT_SETTINGS.camera, ...settings?.camera } };
       const def = new Map(DEFAULT_AREAS.map((a) => [a.id, a]));
@@ -536,6 +548,8 @@ export const useStore = create<State>((set, get) => {
         aprendizajes: aprendizajes ?? [],
         dificultades: dificultades ?? [],
         planes: planes ?? {},
+        repasos: repasos ?? {},
+        atlasAbierto: atlasAbierto ?? null,
         ready: true,
       });
       if (migrate) reclass('all');
@@ -1225,6 +1239,22 @@ export const useStore = create<State>((set, get) => {
       const keep = Object.fromEntries(Object.entries({ ...get().planes, [p.day]: p }).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 120));
       set({ planes: keep });
       DB.kvSet('planes', keep);
+    },
+
+    abrirAtlas: (areaId) => {
+      const atlasAbierto: AtlasAbierto = { day: dayKey(Date.now()), at: Date.now(), areaId };
+      set({ atlasAbierto });
+      DB.kvSet('atlasAbierto', atlasAbierto);
+    },
+
+    responderRepaso: (si) => {
+      const open = get().atlasAbierto;
+      const day = dayKey(Date.now());
+      const repasos = { ...get().repasos, [day]: { day, at: Date.now(), areaId: open?.areaId ?? 'estudio', si } };
+      set({ repasos, atlasAbierto: null });
+      DB.kvSet('repasos', repasos);
+      DB.kvSet('atlasAbierto', null);
+      sound.play(si ? 'saved' : 'tap');
     },
 
     refreshStorage: async () => {

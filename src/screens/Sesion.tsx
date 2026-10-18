@@ -12,6 +12,7 @@ import { DIFICULTADES, LEARN_ORDER, promptOf } from '../lib/aprendizaje';
 import { dayKey } from '../lib/time';
 import { useStore } from '../store';
 import { AreaIcon } from '../components/ui';
+import { AtlasBoton, AtlasPregunta } from '../components/Atlas';
 import { sound } from '../lib/sound';
 
 const fmt = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, '0')}`;
@@ -318,7 +319,9 @@ export default function Sesion() {
                 <button className="btn sm ghost" onClick={() => goNext(false)}>
                   <SkipForward size={14} /> Saltar
                 </button>
+                <AtlasBoton areaId={step.areaId} size="sm" />
               </div>
+              <AtlasPregunta />
               <p className="tiny muted" style={{ maxWidth: 380 }}>Deja el teléfono a un lado: te aviso con voz y campana cuando sea hora de cambiar.</p>
             </motion.div>
           ) : (
@@ -330,6 +333,7 @@ export default function Sesion() {
               <p className="muted">
                 {invested} min invertidos en ti · {done.length} {done.length === 1 ? 'hábito' : 'hábitos'}. Eso cuenta, aunque el día esté pesado.
               </p>
+              <AtlasPregunta />
               <Aprender areaIds={done.map((d) => d.areaId)} />
               <button className="btn primary lg" onClick={close}>
                 Volver a mi ruta
