@@ -80,6 +80,12 @@ Bajo el paso *Estudio* de tu ruta, Búnker te dice qué pide esta semana tu plan
 
 Cuenta cada sesión guiada o “Ya lo hice” de esa área; un día sin eso pero con video del área cuenta como una sesión. Dos semanas antes de cada hito (1 feb: aplicar a 2 plataformas de entrenamiento de IA · 28 mar: decisión · 27 jun: evaluación) lo recuerda bajo *Estudio*. Las fases viven en `src/lib/plan-estudio.ts`.
 
+### Dinero hoy
+
+- **Ajustes → Pagos:** tu lista de pagos del mes (nombre, valor, día, protegido sí/no). Empieza vacía. Se llena a mano o con **Importar**, eligiendo un archivo `.json` de tu dispositivo: `{"pagos": [{"nombre": "…", "valor": 0, "dia": 15, "protegido": true}]}`. Los nombres que ya existen se actualizan, sin duplicar.
+- **En Hoy**, solo si hay algo: una tarjeta con lo que vence en los próximos 3 días y lo vencido sin marcar (en rojo), cada uno con **Pagado** de un toque. Sin pagos cerca, la tarjeta no aparece. Lo que venció antes de que agregaras un pago no se cuenta como vencido (no hay falsas alarmas al importar).
+- Tus pagos viven solo en tu dispositivo y en el **respaldo completo**: nunca en el código, que es público.
+
 ### La huella: tu evidencia en MB, no en GB
 
 Cada video que entra se resume en su **huella**: 16–72 cuadros repartidos a lo largo de todo el video (480 px) y, si hablas (reflexiones), tu voz en un WAV liviano. Medido con 4 videos reales: **1,4 GB → 4,5 MB**, procesados en 39 s.
@@ -176,8 +182,10 @@ src/
     content.ts        Áreas, principios y preguntas del Proyecto Maestro
     atlas.ts          Puente a Atlas: qué pasos lo muestran y cómo se guarda "¿repasaste?"
     plan-estudio.ts   Ruta de estudio: fases por fecha, metas semanales, hitos y conteo de sesiones
+    dinero.ts         Dinero hoy: vencimientos, "pagado" por mes y lectura del archivo de pagos
   components/Turnos.tsx  Semana de turnos y vínculo con la hoja
   components/Atlas.tsx   Botón "Repasar en Atlas" y la pregunta de un toque al volver
+  components/Pagos.tsx   Tarjeta "Dinero hoy" y la lista de pagos de Ajustes
   screens/            Hoy, Cámara, Evidencia, Domingo, Brújula, Ajustes, Modo calma, Película
   store.ts            Estado e ingesta (importar, vincular, procesar, reclasificar, aprender)
 ```
@@ -186,7 +194,7 @@ React + TypeScript + Vite. Sin servidor: todo corre en el navegador. Cada cambio
 
 ## Plan de integración
 
-Búnker es el centro del día; lo nuevo entra como puentes pequeños. Ver [`PLAN-INTEGRACION.md`](PLAN-INTEGRACION.md): I-0 rutina de temporada (en Ajustes, sin código) · **I-1 puente a Atlas ✅** · **I-2 ruta de estudio ✅** · I-3 “Dinero hoy” · I-4 domingo con dinero y estudio · I-5 vehículos de ingreso.
+Búnker es el centro del día; lo nuevo entra como puentes pequeños. Ver [`PLAN-INTEGRACION.md`](PLAN-INTEGRACION.md): I-0 rutina de temporada (en Ajustes, sin código) · **I-1 puente a Atlas ✅** · **I-2 ruta de estudio ✅** · **I-3 “Dinero hoy” ✅** · I-4 domingo con dinero y estudio · I-5 vehículos de ingreso.
 
 ## Siguientes pasos posibles
 

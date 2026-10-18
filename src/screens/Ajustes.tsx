@@ -7,6 +7,7 @@ import { AreaIcon, Glyph, Section, Switch } from '../components/ui';
 import { AREA_COLORS, KIND_INFO, LIFE_AREAS, MOMENTS } from '../lib/content';
 import { durationModels } from '../lib/classify';
 import { SheetPanel, TurnosWeek } from '../components/Turnos';
+import { PagosEditor } from '../components/Pagos';
 import { AREA_ICONS } from '../lib/icons';
 import { DAY_SHORT, fmtBytes, uid } from '../lib/time';
 import { sound, type Sfx } from '../lib/sound';
@@ -70,6 +71,8 @@ export default function Ajustes() {
             <SheetPanel />
           </div>
         </Section>
+
+        <PagosEditor />
 
         <div className="grid g-2">
           <Section eyebrow="Película" title="Motor de la película semanal">
