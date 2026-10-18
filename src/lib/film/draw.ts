@@ -2,6 +2,7 @@
 import type { Area, Clip, Shifts, Statement } from '../types';
 import type { WeekStats } from '../insights';
 import type { Film, Seg } from './edl';
+import type { Cifra } from '../balance';
 import { iconImageSync } from '../icons';
 import { addDays, dayKey, weekStart, DAY_SHORT, fmtDuration, hm, DAY_NAMES, isoWeekday, weekLabel, weekNumber, MONTHS } from '../time';
 
@@ -808,6 +809,31 @@ export function drawMetricas(ctx: CanvasRenderingContext2D, sc: Scene, t: number
     glass(ctx, kx, y, 500, 146, 26, undefined, ap);
     text(ctx, k, kx + 30, y + 50, { size: 19, weight: 600, spacing: 3, color: C.muted, display: false, alpha: ap });
     text(ctx, v, kx + 30, y + 118, { size: 56, weight: 700, alpha: ap });
+  });
+  ctx.restore();
+}
+
+/** La cuarta mirada: pagos a tiempo, deuda total y estudio. Sin dato, "sin datos" (no se inventa). */
+export function drawBalance(ctx: CanvasRenderingContext2D, _sc: Scene, t: number, dur: number, cifras: Cifra[]) {
+  background(ctx, t + 35, '#34D399', '#F5B94A');
+  const env = envelope(t, dur);
+  ctx.save();
+  ctx.globalAlpha = env;
+  text(ctx, 'DINERO Y ESTUDIO', 120, 150, { size: 26, weight: 600, spacing: 8, color: '#9FE8C8' });
+  text(ctx, 'La cuarta mirada', 120, 220, { size: 60, weight: 700 });
+  const w = 540;
+  cifras.slice(0, 3).forEach((c, i) => {
+    const x = 120 + i * (w + 50);
+    const y = 330;
+    const ap = easeOut(ramp(t, 0.3 + i * 0.15, 0.9 + i * 0.15));
+    glass(ctx, x, y, w, 330, 30, undefined, ap);
+    text(ctx, c.label.toUpperCase(), x + 36, y + 64, { size: 22, weight: 600, spacing: 3, color: C.muted, display: false, alpha: ap });
+    if (c.valor) text(ctx, c.valor, x + 36, y + 170, { size: c.valor.length > 12 ? 52 : 64, weight: 700, alpha: ap });
+    else text(ctx, 'sin datos', x + 36, y + 170, { size: 52, weight: 600, color: TAG['sin-datos'].color, alpha: ap });
+    if (c.detalle) {
+      font(ctx, 24, 500, false);
+      wrap(ctx, c.detalle, w - 72).slice(0, 3).forEach((line, k) => text(ctx, line, x + 36, y + 228 + k * 34, { size: 24, weight: 500, color: C.muted, display: false, alpha: ap }));
+    }
   });
   ctx.restore();
 }

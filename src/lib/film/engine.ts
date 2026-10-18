@@ -3,7 +3,7 @@
 import type { Clip } from '../types';
 import { segAt, type Film, type Seg } from './edl';
 import {
-  H, W, type Scene, drawCapitulo, drawClipOverlay, drawComparacion, drawDemo, drawExperimento, drawFinal,
+  H, W, type Scene, drawBalance, drawCapitulo, drawClipOverlay, drawComparacion, drawDemo, drawExperimento, drawFinal,
   drawInsight, drawIntro, drawLoading, drawMetricas, drawPregunta, drawProgress, drawResumen, drawStill, drawFlip, drawVideoFrame, grainOverlay,
 } from './draw';
 import { Ambient, sound } from '../sound';
@@ -529,7 +529,7 @@ export class FilmEngine {
   private cue(seg: Seg) {
     if (seg.t === 'intro') sound.play('intro', true);
     else if (seg.t === 'capitulo') sound.play('chapter', true);
-    else if (seg.t === 'resumen' || seg.t === 'comparacion' || seg.t === 'metricas' || seg.t === 'insight') sound.play('whoosh', true);
+    else if (seg.t === 'resumen' || seg.t === 'comparacion' || seg.t === 'metricas' || seg.t === 'balance' || seg.t === 'insight') sound.play('whoosh', true);
     else if (seg.t === 'final') sound.play('seal', true);
   }
 
@@ -605,6 +605,9 @@ export class FilmEngine {
         break;
       case 'metricas':
         drawMetricas(ctx, sc, t, seg.dur);
+        break;
+      case 'balance':
+        drawBalance(ctx, sc, t, seg.dur, seg.cifras);
         break;
       case 'insight':
         drawInsight(ctx, sc, t, seg.dur, seg.statements);

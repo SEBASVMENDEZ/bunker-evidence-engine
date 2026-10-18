@@ -59,6 +59,7 @@ Nada se etiqueta ni se renombra. Los originales **nunca** se copian, mueven ni b
 - **El domingo en tres miradas**: lo que hiciste (días y minutos por área, con sesiones guiadas aunque no haya video, y cuánto de la ruta cumpliste), lo que aprendiste (tus líneas y las dificultades que se repitieron) y lo que estás construyendo (tus áreas agrupadas por lo que buscan en tu vida, tu dirección y los vehículos que estás probando).
 - **Patrones de 4 semanas**, cada uno con su tamaño de muestra: cuánto de la ruta haces, qué mantienes en días de cansancio y qué cae primero, según el turno, cuánto tardas en retomar un hábito, las dificultades que se repiten y tu hora real de dormir. Son observaciones para investigar, no conclusiones.
 - **Memoria de experimentos** (Brújula): situación y posible explicación → prueba → lo que observaste → conclusión provisional (continuar, modificar, investigar otra explicación). Lo comprobado, separado de lo supuesto.
+- **La cuarta mirada: dinero y estudio.** Tres cifras de la semana: pagos a tiempo (los que vencían esa semana y marcaste *Pagado* antes de terminar su día), deuda total (la escribes tú del último extracto; muestra la diferencia con la anterior) y sesiones de estudio frente a la meta de la fase. La película las incluye en una tarjeta corta después de las métricas. Si falta un dato dice “sin datos”: nunca inventa una cifra. Aparece aunque la semana no tenga videos.
 - **Respaldo completo** en un solo archivo (rutina, turnos, ruta, aprendizajes, revisiones, experimentos y huellas): en el celular se comparte a Drive; se restaura en un toque. Domingo avisa si llevas una semana sin copia.
 
 ### Puente a Atlas
@@ -183,6 +184,7 @@ src/
     atlas.ts          Puente a Atlas: qué pasos lo muestran y cómo se guarda "¿repasaste?"
     plan-estudio.ts   Ruta de estudio: fases por fecha, metas semanales, hitos y conteo de sesiones
     dinero.ts         Dinero hoy: vencimientos, "pagado" por mes y lectura del archivo de pagos
+    balance.ts        La cuarta mirada del domingo: pagos a tiempo, deuda total y estudio
   components/Turnos.tsx  Semana de turnos y vínculo con la hoja
   components/Atlas.tsx   Botón "Repasar en Atlas" y la pregunta de un toque al volver
   components/Pagos.tsx   Tarjeta "Dinero hoy" y la lista de pagos de Ajustes
@@ -194,7 +196,7 @@ React + TypeScript + Vite. Sin servidor: todo corre en el navegador. Cada cambio
 
 ## Plan de integración
 
-Búnker es el centro del día; lo nuevo entra como puentes pequeños. Ver [`PLAN-INTEGRACION.md`](PLAN-INTEGRACION.md): I-0 rutina de temporada (en Ajustes, sin código) · **I-1 puente a Atlas ✅** · **I-2 ruta de estudio ✅** · **I-3 “Dinero hoy” ✅** · I-4 domingo con dinero y estudio · I-5 vehículos de ingreso.
+Búnker es el centro del día; lo nuevo entra como puentes pequeños. Ver [`PLAN-INTEGRACION.md`](PLAN-INTEGRACION.md): I-0 rutina de temporada (en Ajustes, sin código) · **I-1 puente a Atlas ✅** · **I-2 ruta de estudio ✅** · **I-3 “Dinero hoy” ✅** · **I-4 domingo con dinero y estudio ✅** · I-5 vehículos de ingreso.
 
 ## Siguientes pasos posibles
 

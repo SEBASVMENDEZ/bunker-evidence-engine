@@ -7,6 +7,8 @@ import { computeWeek, history, insights, shiftStats, trend } from '../lib/insigh
 import { shiftType, type ShiftType } from '../lib/classify';
 import { TurnosWeek } from '../components/Turnos';
 import { BackupNudge, Patrones, TresMiradas } from '../components/Semana';
+import { CuartaMirada } from '../components/Balance';
+import { cuartaMirada } from '../lib/balance';
 import { buildFilm } from '../lib/film/edl';
 import { TAG } from '../lib/film/draw';
 import { DECISIONS, WEEKLY_QUESTIONS } from '../lib/content';
@@ -43,13 +45,16 @@ export default function Domingo() {
   const prev = past[0];
   const statements = useMemo(() => insights(stats, past, areas, clips, shifts), [stats, past, areas, clips, shifts]);
   const tr = useMemo(() => trend(clips, areas, week, 8), [clips, areas, week]);
+  const pagos = useStore((s) => s.pagos);
+  const pagados = useStore((s) => s.pagados);
+  const balance = useMemo(() => cuartaMirada(week, { pagos, pagados, reviews, hechos, clips }), [week, pagos, pagados, reviews, hechos, clips]);
   const film = useMemo(
     () =>
       buildFilm({
         week, clips: stats.clips, areas, stats, prevStats: prev, statements, review, prevReview,
-        minutes: settings.filmMinutes, grouping: settings.filmGrouping, shifts,
+        minutes: settings.filmMinutes, grouping: settings.filmGrouping, shifts, balance,
       }),
-    [week, stats, areas, prev, statements, review, prevReview, settings.filmMinutes, settings.filmGrouping, shifts],
+    [week, stats, areas, prev, statements, review, prevReview, settings.filmMinutes, settings.filmGrouping, shifts, balance],
   );
   const sessions = Object.values(stats.areas).reduce((s, a) => s + a.sessions, 0);
   const prevSessions = prev ? Object.values(prev.areas).reduce((s, a) => s + a.sessions, 0) : 0;
@@ -114,8 +119,12 @@ export default function Domingo() {
       </div>
 
       {stats.total === 0 && !weekActive ? (
-        <div className="card">
-          <Empty icon={<Film />} title="Esta semana no tiene evidencia" text="Cuando grabes o sincronices tus videos, aquí aparecerá la película y las métricas." action={<button className="btn primary" onClick={() => go('evidencia')}>Ir a Evidencia</button>} />
+        <div className="grid" style={{ gap: 18 }}>
+          <div className="card">
+            <Empty icon={<Film />} title="Esta semana no tiene evidencia" text="Cuando grabes o sincronices tus videos, aquí aparecerá la película y las métricas." action={<button className="btn primary" onClick={() => go('evidencia')}>Ir a Evidencia</button>} />
+          </div>
+          {/* pagos y deuda existen aunque no hayas grabado nada */}
+          <CuartaMirada week={week} />
         </div>
       ) : (
         <div className="grid" style={{ gap: 18 }}>
@@ -179,6 +188,7 @@ export default function Domingo() {
 
           {/* LAS TRES MIRADAS (retroalimentación de tu maestro) */}
           <TresMiradas week={week} />
+          <CuartaMirada week={week} />
           <Patrones />
 
           {/* KPIs, matriz y tendencia: solo cuando hay video esta semana */}
