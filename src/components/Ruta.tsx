@@ -6,8 +6,9 @@ import { useStore, dayPrefsOf, needsConfirm } from '../store';
 import { AreaIcon } from './ui';
 import { AtlasBoton, AtlasPregunta } from './Atlas';
 import { usaAtlas } from '../lib/atlas';
+import { lineaSemana, proximoHito } from '../lib/plan-estudio';
 import { habitOf, habitualBed, planDay, type Step } from '../lib/ruta';
-import { addDays, dayKey } from '../lib/time';
+import { addDays, dayKey, MONTHS } from '../lib/time';
 import type { Energy } from '../lib/types';
 
 const t = (ms: number) => new Date(ms).toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' });
@@ -105,6 +106,9 @@ export function RutaHoy() {
   const lastIntent = intents[intents.length - 1];
   const pendingIntent = lastIntent && now - lastIntent.at < 45 * 60000 ? lastIntent : null;
   const mode = MODE[route.mode];
+  // ruta de estudio: lo que pide esta semana cada paso (la fase cambia sola con la fecha)
+  const semana = Object.fromEntries(route.steps.map((s) => [s.areaId, lineaSemana(s.areaId, today, hechos, clips)]));
+  const hito = proximoHito(today);
 
   const start = (steps: Step[], minimal = false) =>
     openSesion({
@@ -235,9 +239,16 @@ export function RutaHoy() {
                     </button>
                   )}
                 </div>
-                {/* Estudio y Lectura: el puente a Atlas, en su propia línea (en el celular la fila no da para más) */}
-                {usaAtlas(s.areaId) && (
-                  <div style={{ padding: '0 4px 8px 77px' }}>
+                {/* debajo del paso: la meta de la semana según tu ruta de estudio, y el puente a Atlas
+                    (en su propia línea: en el celular la fila no da para más) */}
+                {(usaAtlas(s.areaId) || semana[s.areaId]) && (
+                  <div className="col" style={{ gap: 6, padding: '0 4px 8px 77px', alignItems: 'flex-start' }}>
+                    {semana[s.areaId] && <span className="tiny muted">{semana[s.areaId]}</span>}
+                    {s.areaId === 'estudio' && hito && (
+                      <span className="tiny" style={{ color: '#F5B94A' }}>
+                        Próximo hito · {hito.day === today ? 'hoy' : `${+hito.day.slice(8)} ${MONTHS[+hito.day.slice(5, 7) - 1]}`}: {hito.text}
+                      </span>
+                    )}
                     <AtlasBoton areaId={s.areaId} size="fila" />
                   </div>
                 )}
