@@ -2,6 +2,7 @@
 // Reglas simples y predecibles; los originales nunca se modifican.
 import type { Area, Clip, Shifts, Statement, WeekReview } from '../types';
 import type { WeekStats } from '../insights';
+import type { Cifra } from '../balance';
 import { DAY_NAMES, dayKey, fmtDuration, isoWeekday, weekDays } from '../time';
 import { realSecs } from '../classify';
 
@@ -22,6 +23,7 @@ export type Seg = Base &
     | { t: 'clip'; clipId: string; from: number; to: number; rate: number; factor: number; audio: boolean; badge: Badge; part: [number, number]; index: number; ofArea: number; flip?: boolean }
     | { t: 'comparacion' }
     | { t: 'metricas' }
+    | { t: 'balance'; cifras: Cifra[] }
     | { t: 'insight'; statements: Statement[] }
     | { t: 'pregunta'; text: string }
     | { t: 'final'; priority?: string; experiment?: string }
@@ -159,7 +161,7 @@ function planClip(c: Clip, scale: number): Piece[] {
 
 const outOf = (ps: Piece[]) => ps.reduce((s, p) => s + (p.to - p.from) / p.rate, 0);
 
-const FIXED = { intro: 4.4, resumen: 7.5, experimento: 5.5, capitulo: 3.4, comparacion: 7, metricas: 7, pregunta: 6.5, final: 7.5 };
+const FIXED = { intro: 4.4, resumen: 7.5, experimento: 5.5, capitulo: 3.4, comparacion: 7, metricas: 7, balance: 6, pregunta: 6.5, final: 7.5 };
 
 export interface FilmInput {
   week: string;
@@ -173,6 +175,7 @@ export interface FilmInput {
   minutes: number;
   grouping: 'area' | 'dia';
   shifts?: Shifts;
+  balance?: Cifra[]; // la cuarta mirada: pagos a tiempo, deuda total y estudio (sin datos = null)
 }
 
 export function buildFilm(inp: FilmInput): Film {
@@ -230,7 +233,7 @@ export function buildFilm(inp: FilmInput): Film {
   const insightDur = clamp(4 + filmStatements.length * 1.5, 8, 17);
   const fixed =
     FIXED.intro + FIXED.resumen + (inp.prevReview?.experiment ? FIXED.experimento : 0) + groups.length * FIXED.capitulo +
-    (hasPrev ? FIXED.comparacion : 0) + FIXED.metricas + insightDur + FIXED.pregunta + FIXED.final;
+    (hasPrev ? FIXED.comparacion : 0) + FIXED.metricas + (inp.balance ? FIXED.balance : 0) + insightDur + FIXED.pregunta + FIXED.final;
   const budget = Math.max(30, inp.minutes * 60 - fixed);
 
   // ajustar la escala hasta caber en la duración objetivo
@@ -279,6 +282,7 @@ export function buildFilm(inp: FilmInput): Film {
   openChapter('Balance', '#E2E8F0', 'meta');
   if (hasPrev) push({ t: 'comparacion', dur: FIXED.comparacion });
   push({ t: 'metricas', dur: FIXED.metricas });
+  if (inp.balance) push({ t: 'balance', dur: FIXED.balance, cifras: inp.balance });
   push({ t: 'insight', dur: insightDur, statements: filmStatements });
   const q = inp.statements.find((s) => s.type === 'pregunta')?.text ?? '¿Qué variable cambiarás en el próximo experimento?';
   push({ t: 'pregunta', dur: FIXED.pregunta, text: q });

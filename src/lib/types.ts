@@ -120,6 +120,7 @@ export interface WeekReview {
   experimentObs?: string; // (en la semana siguiente) qué observaste de verdad
   experimentNext?: 'continuar' | 'modificar' | 'otra'; // conclusión provisional
   energy?: number;
+  deudaTotal?: number; // la escribes tú, del último extracto (opcional)
   sealedAt?: number;
   watchedAt?: number;
 }

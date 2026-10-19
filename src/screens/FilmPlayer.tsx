@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { X, Play, Pause, SkipBack, SkipForward, Music, Music2, Maximize, Download, RotateCcw, ClipboardCheck, Volume2, Loader2 } from 'lucide-react';
 import { useStore } from '../store';
 import { computeWeek, history, insights } from '../lib/insights';
+import { cuartaMirada } from '../lib/balance';
 import { buildFilm } from '../lib/film/edl';
 import { FilmEngine, type EngineState } from '../lib/film/engine';
 import { exportFilm, saveBlob, type ExportJob } from '../lib/film/export';
@@ -38,10 +39,12 @@ export default function FilmPlayer({ week }: { week: string }) {
     const stats = computeWeek(clips, areas, week);
     const past = history(clips, areas, week, 4);
     const statements = insights(stats, past, areas, clips, shifts);
+    const { pagos, pagados, hechos } = useStore.getState();
     const film = buildFilm({
       week, clips: stats.clips, areas, stats, prevStats: past[0], statements,
       review: reviews[week], prevReview: reviews[shiftWeek(week, -1)],
       minutes: settings.filmMinutes, grouping: settings.filmGrouping, shifts,
+      balance: cuartaMirada(week, { pagos, pagados, reviews, hechos, clips }),
     });
     return { stats, past, statements, film };
     // eslint-disable-next-line react-hooks/exhaustive-deps
