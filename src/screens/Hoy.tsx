@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Flame, Play, Video, ChevronDown, Clapperboard, Wind, FolderSync, Sparkles, Quote, RefreshCw, Briefcase, Waves, X, Upload } from 'lucide-react';
+import { Flame, Play, Video, ChevronDown, Clapperboard, Wind, FolderSync, Sparkles, Quote, RefreshCw, Briefcase, Waves, X, Upload, Settings } from 'lucide-react';
 import { useStore } from '../store';
 import { AreaIcon, RoutineRing, Counter, Section } from '../components/ui';
 import { computeWeek, streak } from '../lib/insights';
@@ -71,7 +71,7 @@ export default function Hoy() {
             {principle}
           </p>
         </div>
-        <div className="row">
+        <div className="row wrap">
           {(folders.length > 0 || sheet?.handle) && (
             <button className="btn" disabled={queue.running} onClick={() => { sound.play('tap'); syncAll(true); }} title="Buscar videos nuevos y releer tu hoja de turnos">
               <RefreshCw size={16} className={queue.running ? 'spin' : ''} /> {queue.running ? `${queue.done}/${queue.total}` : 'Sincronizar'}
@@ -82,6 +82,10 @@ export default function Hoy() {
           </button>
           <button className="btn primary" onClick={() => record()}>
             <Video size={16} /> Grabar
+          </button>
+          {/* en el celular el menú lateral no existe y la barra de abajo no trae Ajustes: este es el camino */}
+          <button className="btn only-mobile" onClick={() => { sound.play('tap'); go('ajustes'); }}>
+            <Settings size={16} /> Ajustes
           </button>
         </div>
       </div>

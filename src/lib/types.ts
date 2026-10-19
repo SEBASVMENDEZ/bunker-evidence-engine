@@ -142,6 +142,8 @@ export interface Vehicle {
   hypothesis: string;
   evidenceNeeded: string;
   reviewOn?: string;
+  corte?: string; // regla de corte: cuándo se cierra si no hay resultados
+  plantilla?: string; // de qué plantilla salió (para no ofrecerla dos veces)
   status: 'probando' | 'mantener' | 'pausado' | 'descartado';
   createdAt: number;
 }

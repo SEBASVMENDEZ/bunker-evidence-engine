@@ -370,6 +370,10 @@ p {
 }
 
 /* ---------- botones ---------- */
+/* solo en el celular (en el computador lo resuelve el menú lateral) */
+.btn.only-mobile {
+  display: none;
+}
 .btn {
   display: inline-flex;
   align-items: center;
@@ -871,6 +875,9 @@ input[type='time'] {
   }
   .page-head .title {
     font-size: 28px;
+  }
+  .btn.only-mobile {
+    display: inline-flex;
   }
   .mobile-bar {
     display: flex;
