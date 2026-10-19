@@ -8,6 +8,7 @@ import { DAILY_QUESTIONS, PRINCIPLES } from '../lib/content';
 import { DAY_SHORT, dayKey, fmtDayLong, fmtDuration, greeting, hm, isoWeekday, weekDays, weekKey, weekNumber } from '../lib/time';
 import { sound } from '../lib/sound';
 import { RutaHoy } from '../components/Ruta';
+import { DineroHoy } from '../components/Pagos';
 
 export default function Hoy() {
   const settings = useStore((s) => s.settings);
@@ -114,6 +115,9 @@ export default function Hoy() {
 
       <div className="grid g-3">
         {/* AHORA / DOMINGO */}
+        {/* DINERO HOY: solo si hay pagos en los próximos 3 días o vencidos (cero mora va primero) */}
+        <DineroHoy />
+
         {/* TU RUTA: el siguiente paso, ya decidido */}
         <RutaHoy />
 

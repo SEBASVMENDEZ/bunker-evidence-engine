@@ -3,6 +3,7 @@ import type { Area, CalmLog, Clip, Compass, DailyLog, DayPrefs, Energy, Hecho, I
 import { DEFAULT_DAY } from './lib/ruta';
 import type { Aprendizaje, Dificultad, PlanSnapshot } from './lib/aprendizaje';
 import type { AtlasAbierto, Repaso } from './lib/atlas';
+import { pagadoKey, type Pago } from './lib/dinero';
 import * as DB from './lib/db';
 import { DEFAULT_AREAS, DEFAULT_COMPASS, DEFAULT_SETTINGS } from './lib/content';
 import { inferKind, isAnchor, markRepetitions, reclassify, CONFIRM_THRESHOLD } from './lib/classify';
@@ -65,6 +66,9 @@ interface State {
   // ---- puente a Atlas ----
   repasos: Record<string, Repaso>; // día → "¿repasaste tus conceptos?"
   atlasAbierto: AtlasAbierto | null; // abriste Atlas y la pregunta te espera al volver
+  // ---- dinero hoy ----
+  pagos: Pago[]; // los escribes tú (nunca en el código)
+  pagados: Record<string, number>; // "pagoId|YYYY-MM" → cuándo lo marcaste pagado
 
   init: () => Promise<void>;
   go: (r: Route) => void;
@@ -124,6 +128,9 @@ interface State {
   abrirAtlas: (areaId: string) => void;
   /** "¿Repasaste tus conceptos?" Sí / Hoy no: queda como un hecho más del día. */
   responderRepaso: (si: boolean) => void;
+  setPagos: (p: Pago[]) => void;
+  /** Un toque: este pago de este mes ya está pagado (o se deshace). */
+  marcarPagado: (pagoId: string, ciclo: string, pagado?: boolean) => void;
 }
 
 /** Tus preferencias del día (con los valores por defecto donde no hayas elegido). */
@@ -476,9 +483,11 @@ export const useStore = create<State>((set, get) => {
     planes: {},
     repasos: {},
     atlasAbierto: null,
+    pagos: [],
+    pagados: {},
 
     init: async () => {
-      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents, hechos, sleep, aprendizajes, dificultades, planes, repasos, atlasAbierto] = await Promise.all([
+      const [settings, areas, compass, samples, calm, clips, reviews, daily, folders, shifts, sheet, intents, hechos, sleep, aprendizajes, dificultades, planes, repasos, atlasAbierto, pagos, pagados] = await Promise.all([
         DB.kvGet<Settings>('settings'),
         DB.kvGet<Area[]>('areas'),
         DB.kvGet<Compass>('compass'),
@@ -498,6 +507,8 @@ export const useStore = create<State>((set, get) => {
         DB.kvGet<Record<string, PlanSnapshot>>('planes'),
         DB.kvGet<Record<string, Repaso>>('repasos'),
         DB.kvGet<AtlasAbierto>('atlasAbierto'),
+        DB.kvGet<Pago[]>('pagos'),
+        DB.kvGet<Record<string, number>>('pagados'),
       ]);
       const st: Settings = { ...DEFAULT_SETTINGS, ...settings, camera: { ...DEFAULT_SETTINGS.camera, ...settings?.camera } };
       const def = new Map(DEFAULT_AREAS.map((a) => [a.id, a]));
@@ -550,6 +561,8 @@ export const useStore = create<State>((set, get) => {
         planes: planes ?? {},
         repasos: repasos ?? {},
         atlasAbierto: atlasAbierto ?? null,
+        pagos: pagos ?? [],
+        pagados: pagados ?? {},
         ready: true,
       });
       if (migrate) reclass('all');
@@ -1255,6 +1268,23 @@ export const useStore = create<State>((set, get) => {
       DB.kvSet('repasos', repasos);
       DB.kvSet('atlasAbierto', null);
       sound.play(si ? 'saved' : 'tap');
+    },
+
+    setPagos: (pagos) => {
+      set({ pagos });
+      DB.kvSet('pagos', pagos);
+    },
+
+    marcarPagado: (pagoId, ciclo, pagado = true) => {
+      const k = pagadoKey(pagoId, ciclo);
+      const pagados = { ...get().pagados };
+      if (pagado) pagados[k] = Date.now();
+      else delete pagados[k];
+      // solo el último año: lo suficiente para el domingo y para deshacer
+      const keep = Object.fromEntries(Object.entries(pagados).sort((a, b) => b[1] - a[1]).slice(0, 600));
+      set({ pagados: keep });
+      DB.kvSet('pagados', keep);
+      sound.play(pagado ? 'saved' : 'tap');
     },
 
     refreshStorage: async () => {
