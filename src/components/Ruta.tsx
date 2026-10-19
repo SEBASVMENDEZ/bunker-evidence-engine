@@ -4,6 +4,8 @@ import { motion } from 'motion/react';
 import { Play, Check, Clock, Moon, BatteryLow, BatteryMedium, BatteryFull, SlidersHorizontal, Briefcase, Sparkles, X, Star } from 'lucide-react';
 import { useStore, dayPrefsOf, needsConfirm } from '../store';
 import { AreaIcon } from './ui';
+import { AtlasBoton, AtlasPregunta } from './Atlas';
+import { usaAtlas } from '../lib/atlas';
 import { habitOf, habitualBed, planDay, type Step } from '../lib/ruta';
 import { addDays, dayKey } from '../lib/time';
 import type { Energy } from '../lib/types';
@@ -154,6 +156,9 @@ export function RutaHoy() {
           </div>
         )}
 
+        {/* al volver de Atlas: un toque */}
+        <AtlasPregunta />
+
         {/* AHORA: el siguiente paso, ya decidido */}
         {first ? (
           <div className="col" style={{ gap: 12, padding: 16, borderRadius: 22, background: `linear-gradient(135deg, ${areaOf(first.areaId)?.color ?? '#6D8BFF'}22, rgba(255,255,255,.02))`, border: `1px solid ${areaOf(first.areaId)?.color ?? '#6D8BFF'}55` }}>
@@ -182,6 +187,7 @@ export function RutaHoy() {
                   Solo el mínimo · {groupMinimal} min
                 </button>
               )}
+              {group.length === 1 && <AtlasBoton areaId={first.areaId} />}
             </div>
             <div className="row wrap" style={{ gap: 6 }}>
               <button className="btn sm ghost" onClick={() => postpone(group.map((s) => s.areaId), 60)}>
@@ -206,26 +212,34 @@ export function RutaHoy() {
             const a = areaOf(s.areaId);
             const h = s.done ? hechos.find((x) => x.day === today && x.areaId === s.areaId) : undefined;
             return (
-              <div key={s.areaId + i} className="row" style={{ gap: 10, padding: '7px 4px', borderBottom: '1px solid rgba(255,255,255,.05)', opacity: s.done ? 0.6 : 1 }}>
-                <span className="mono tiny muted" style={{ width: 44 }}>{t(s.start)}</span>
-                <span style={{ width: 9, height: 9, borderRadius: 9, background: a?.color, flexShrink: 0 }} />
-                <span className="grow small" style={{ textDecoration: s.done ? 'line-through' : 'none' }}>
-                  {a?.name}
-                  {(a?.priority ?? 2) >= 3 && <Star size={11} style={{ marginLeft: 4, verticalAlign: -1 }} fill="#F5B94A" color="#F5B94A" />}
-                </span>
-                {!s.done && (
-                  <span className="tiny" style={{ color: LEVEL[s.level].color, fontWeight: 600 }}>
-                    {s.minutes} min · {LEVEL[s.level].label}
+              <div key={s.areaId + i} style={{ borderBottom: '1px solid rgba(255,255,255,.05)', opacity: s.done ? 0.6 : 1 }}>
+                <div className="row" style={{ gap: 10, padding: '7px 4px' }}>
+                  <span className="mono tiny muted" style={{ width: 44 }}>{t(s.start)}</span>
+                  <span style={{ width: 9, height: 9, borderRadius: 9, background: a?.color, flexShrink: 0 }} />
+                  <span className="grow small" style={{ textDecoration: s.done ? 'line-through' : 'none' }}>
+                    {a?.name}
+                    {(a?.priority ?? 2) >= 3 && <Star size={11} style={{ marginLeft: 4, verticalAlign: -1 }} fill="#F5B94A" color="#F5B94A" />}
                   </span>
-                )}
-                {s.done ? (
-                  <button className="btn icon sm ghost" onClick={() => h && removeHecho(h.id)} aria-label="Hecho" title={h ? 'Deshacer' : 'Hecho (con evidencia)'}>
-                    <Check size={15} color="#34D399" />
-                  </button>
-                ) : (
-                  <button className="btn icon sm ghost" onClick={() => start([s])} aria-label={`Empezar ${a?.name}`}>
-                    <Play size={14} />
-                  </button>
+                  {!s.done && (
+                    <span className="tiny" style={{ color: LEVEL[s.level].color, fontWeight: 600 }}>
+                      {s.minutes} min · {LEVEL[s.level].label}
+                    </span>
+                  )}
+                  {s.done ? (
+                    <button className="btn icon sm ghost" onClick={() => h && removeHecho(h.id)} aria-label="Hecho" title={h ? 'Deshacer' : 'Hecho (con evidencia)'}>
+                      <Check size={15} color="#34D399" />
+                    </button>
+                  ) : (
+                    <button className="btn icon sm ghost" onClick={() => start([s])} aria-label={`Empezar ${a?.name}`}>
+                      <Play size={14} />
+                    </button>
+                  )}
+                </div>
+                {/* Estudio y Lectura: el puente a Atlas, en su propia línea (en el celular la fila no da para más) */}
+                {usaAtlas(s.areaId) && (
+                  <div style={{ padding: '0 4px 8px 77px' }}>
+                    <AtlasBoton areaId={s.areaId} size="fila" />
+                  </div>
                 )}
               </div>
             );

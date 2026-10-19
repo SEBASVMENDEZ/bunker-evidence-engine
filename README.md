@@ -61,6 +61,13 @@ Nada se etiqueta ni se renombra. Los originales **nunca** se copian, mueven ni b
 - **Memoria de experimentos** (Brújula): situación y posible explicación → prueba → lo que observaste → conclusión provisional (continuar, modificar, investigar otra explicación). Lo comprobado, separado de lo supuesto.
 - **Respaldo completo** en un solo archivo (rutina, turnos, ruta, aprendizajes, revisiones, experimentos y huellas): en el celular se comparte a Drive; se restaura en un toque. Domingo avisa si llevas una semana sin copia.
 
+### Puente a Atlas
+
+[Atlas](https://atlas-recuerda.vercel.app) es la app de repaso activo donde practicas los conceptos de tus cursos. Búnker no le manda nada (ni rutina ni datos personales): solo la abre.
+
+- En **Hoy** (bajo los pasos *Estudio* y *Lectura* de tu ruta, y en la tarjeta grande cuando el siguiente paso es uno de ellos) y en la **sesión guiada** (mientras el cronómetro está en Estudio o Lectura) aparece **Repasar en Atlas**, que la abre en otra pestaña. En los demás pasos no aparece.
+- Al volver, una pregunta opcional de un toque: **¿Repasaste tus conceptos?** (Sí / Hoy no). Se guarda como un hecho más del día (la última respuesta del día manda) y entra al **respaldo completo**. Si no respondes, la pregunta se va sola al terminar el día.
+
 ### La huella: tu evidencia en MB, no en GB
 
 Cada video que entra se resume en su **huella**: 16–72 cuadros repartidos a lo largo de todo el video (480 px) y, si hablas (reflexiones), tu voz en un WAV liviano. Medido con 4 videos reales: **1,4 GB → 4,5 MB**, procesados en 39 s.
@@ -155,12 +162,18 @@ src/
     sound.ts          Efectos y banda sonora sintetizados (sin archivos de audio)
     db.ts             Almacenamiento local (IndexedDB)
     content.ts        Áreas, principios y preguntas del Proyecto Maestro
+    atlas.ts          Puente a Atlas: qué pasos lo muestran y cómo se guarda "¿repasaste?"
   components/Turnos.tsx  Semana de turnos y vínculo con la hoja
+  components/Atlas.tsx   Botón "Repasar en Atlas" y la pregunta de un toque al volver
   screens/            Hoy, Cámara, Evidencia, Domingo, Brújula, Ajustes, Modo calma, Película
   store.ts            Estado e ingesta (importar, vincular, procesar, reclasificar, aprender)
 ```
 
 React + TypeScript + Vite. Sin servidor: todo corre en el navegador. Cada cambio en `main` se publica solo en GitHub Pages.
+
+## Plan de integración
+
+Búnker es el centro del día; lo nuevo entra como puentes pequeños. Ver [`PLAN-INTEGRACION.md`](PLAN-INTEGRACION.md): I-0 rutina de temporada (en Ajustes, sin código) · **I-1 puente a Atlas ✅** · I-2 ruta de estudio · I-3 “Dinero hoy” · I-4 domingo con dinero y estudio · I-5 vehículos de ingreso.
 
 ## Siguientes pasos posibles
 
